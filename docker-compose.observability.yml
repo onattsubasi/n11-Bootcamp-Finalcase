@@ -1,0 +1,89 @@
+services:
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-19090}:9090"
+    networks:
+      - finalcase-net
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "${GRAFANA_PORT:-13001}:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - jaeger
+    networks:
+      - finalcase-net
+
+  loki:
+    image: grafana/loki:3.1.0
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki-config.yaml
+    volumes:
+      - ./infra/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki_data:/loki
+    ports:
+      - "${LOKI_PORT:-13100}:3100"
+    networks:
+      - finalcase-net
+
+  promtail:
+    image: grafana/promtail:3.1.0
+    restart: unless-stopped
+    user: root
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    volumes:
+      - ./infra/promtail/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      - loki
+    networks:
+      - finalcase-net
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "${JAEGER_UI_PORT:-16686}:16686"
+    networks:
+      - finalcase-net
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.102.0
+    restart: unless-stopped
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./infra/otel-collector/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    depends_on:
+      - jaeger
+    networks:
+      - finalcase-net
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:

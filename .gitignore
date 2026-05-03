@@ -1,0 +1,314 @@
+# =========================================================
+# Marketplace Microservices E-Commerce Platform
+# Java 21 / Spring Boot / Maven / React + Vite / Docker / AWS
+# =========================================================
+
+# ---------------------------------------------------------
+# OS / System files
+# ---------------------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.Spotlight-V100/
+.Trashes/
+._*
+
+# ---------------------------------------------------------
+# IDE / Editor files
+# ---------------------------------------------------------
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+.project
+.classpath
+.settings/
+.springBeans
+.sts4-cache/
+.factorypath
+
+# ---------------------------------------------------------
+# Maven / Java / Spring Boot build outputs
+# ---------------------------------------------------------
+target/
+**/target/
+out/
+build/
+**/build/
+bin/
+**/bin/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+*.log
+*.tmp
+*.temp
+
+# Maven wrapper should be committed.
+!mvnw
+!mvnw.cmd
+!.mvn/wrapper/maven-wrapper.properties
+
+# Maven local repository must not be committed.
+.m2/
+repository/
+
+# ---------------------------------------------------------
+# Test reports / coverage
+# ---------------------------------------------------------
+surefire-reports/
+failsafe-reports/
+**/target/surefire-reports/
+**/target/failsafe-reports/
+jacoco.exec
+jacoco-it.exec
+coverage/
+**/coverage/
+.nyc_output/
+
+# ---------------------------------------------------------
+# Spring Boot runtime files
+# ---------------------------------------------------------
+logs/
+**/logs/
+application-local.yml
+application-local.yaml
+application-dev-local.yml
+application-dev-local.yaml
+application-prod-local.yml
+application-prod-local.yaml
+
+# Keep example config files.
+!application-example.yml
+!application-example.yaml
+!application-template.yml
+!application-template.yaml
+
+# ---------------------------------------------------------
+# Environment variables / secrets
+# ---------------------------------------------------------
+.env
+.env.*
+*.env
+*.local
+*.secret
+*.secrets
+secrets/
+.secret/
+.credentials/
+aws-credentials*
+gcp-credentials*
+service-account*.json
+
+# Keep documented examples.
+!.env.example
+!.env.template
+!.env.sample
+
+# ---------------------------------------------------------
+# Frontend / Node / React / Vite
+# ---------------------------------------------------------
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+.vite/
+frontend/.vite/
+.cache/
+frontend/.cache/
+.parcel-cache/
+.eslintcache
+stylelintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+.yarn/
+.yarn-cache/
+.yarnrc.yml
+
+# Keep lock files for reproducible builds.
+!package-lock.json
+!frontend/package-lock.json
+!yarn.lock
+!frontend/yarn.lock
+!pnpm-lock.yaml
+!frontend/pnpm-lock.yaml
+
+# ---------------------------------------------------------
+# Docker / Docker Compose local state
+# ---------------------------------------------------------
+docker-compose.override.yml
+docker-compose.local.yml
+docker-compose.dev.yml
+docker-compose.prod.local.yml
+*.pid
+*.seed
+*.dump
+*.sql.gz
+*.tar.gz
+
+# Local mounted volumes / generated data
+.docker-data/
+docker-data/
+volumes/
+postgres-data/
+rabbitmq-data/
+grafana-data/
+prometheus-data/
+loki-data/
+jaeger-data/
+
+# ---------------------------------------------------------
+# Database / migration local artifacts
+# ---------------------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+*.h2.db
+*.mv.db
+*.trace.db
+pgdata/
+postgres/
+data/
+
+# Flyway migration files SHOULD be committed.
+!**/src/main/resources/db/migration/*.sql
+
+# ---------------------------------------------------------
+# Logs / monitoring / observability local files
+# ---------------------------------------------------------
+*.log.*
+*.log
+log/
+logs/
+*.out
+*.err
+prometheus-data/
+grafana-storage/
+loki-storage/
+tempo-data/
+jaeger-storage/
+
+# ---------------------------------------------------------
+# AWS / Elastic Beanstalk / deployment artifacts
+# ---------------------------------------------------------
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
+
+eb-bundle/
+eb-application-*.zip
+*.elasticbeanstalk.zip
+deploy-package.zip
+deployment.zip
+
+# AWS SAM / CDK / Serverless artifacts if added later
+.aws-sam/
+cdk.out/
+.serverless/
+
+# ---------------------------------------------------------
+# Jib / container build artifacts
+# ---------------------------------------------------------
+jib-image.*
+jib-cache/
+.jib-cache/
+**/target/jib-cache/
+**/target/jib-image.*
+
+# ---------------------------------------------------------
+# Generated API docs / OpenAPI temporary exports
+# ---------------------------------------------------------
+openapi-generated/
+generated-openapi/
+swagger-generated/
+api-docs-generated/
+*.openapi.json
+*.swagger.json
+
+# Keep manually maintained documentation.
+!docs/**/*.md
+!README.md
+
+# ---------------------------------------------------------
+# Generated sources
+# ---------------------------------------------------------
+generated/
+generated-sources/
+**/target/generated-sources/
+**/target/generated-test-sources/
+
+# ---------------------------------------------------------
+# Lombok / annotation processor transient files
+# ---------------------------------------------------------
+delombok/
+**/delombok/
+
+# ---------------------------------------------------------
+# Testcontainers / local integration test leftovers
+# ---------------------------------------------------------
+.testcontainers.properties
+docker-compose-test.yml
+test-results/
+**/test-results/
+
+# ---------------------------------------------------------
+# Temporary files
+# ---------------------------------------------------------
+tmp/
+temp/
+.tmp/
+.temp/
+*.swp
+*.swo
+*~
+*.bak
+*.backup
+*.orig
+*.rej
+
+# ---------------------------------------------------------
+# Archives / large exports
+# ---------------------------------------------------------
+*.zip
+*.7z
+*.rar
+*.tar
+*.gz
+*.bz2
+*.xz
+
+# But allow intentional release/deployment templates if needed.
+!docs/**/*.zip
+!deploy/**/*.zip
+
+# ---------------------------------------------------------
+# Project patch artifacts created during development
+# ---------------------------------------------------------
+*_PATCH_FINAL_SINGLE.zip
+*_patch*.zip
+*-patch.zip
+patches/
+artifact/
+artifacts/
+
+# ---------------------------------------------------------
+# Local notes / scratch files
+# ---------------------------------------------------------
+notes.local.md
+scratch.md
+TODO.local.md
+local-*.md
+texts/

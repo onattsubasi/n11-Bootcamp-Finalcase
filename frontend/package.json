@@ -1,0 +1,36 @@
+{
+  "name": "marketplace-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "React single-page application for a marketplace experience. The app is built with Vite, React Router, TanStack Query, Zustand, Axios, and Tailwind CSS.",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "postcss.config.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.100.8",
+    "axios": "^1.15.2",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.14.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "react-hot-toast": "^2.4.1",
+    "react-router-dom": "^6.30.3",
+    "tailwind-merge": "^2.6.1",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.13",
+    "tailwindcss": "^3.4.19",
+    "vite": "^5.4.21"
+  }
+}

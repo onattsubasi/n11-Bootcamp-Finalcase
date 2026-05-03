@@ -1,0 +1,226 @@
+# Rendered by .github/workflows/deploy-elastic-beanstalk.yml
+# PostgreSQL is expected to be AWS RDS, not a container.
+
+x-aws-service-env: &aws-service-env
+  SPRING_PROFILES_ACTIVE: prod
+  SERVER_PORT: 8080
+  EUREKA_URI: http://discovery-service:8761/eureka/
+  SPRING_RABBITMQ_HOST: rabbitmq
+  SPRING_RABBITMQ_PORT: 5672
+  SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER}
+  SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  discovery-service:
+    image: __ECR_REGISTRY__/__ECR_REPOSITORY_PREFIX__-discovery-service:__IMAGE_TAG__
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: 8761
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "false"
+      EUREKA_CLIENT_FETCH_REGISTRY: "false"
+
+  api-gateway:
+    image: __ECR_REGISTRY__/__ECR_REPOSITORY_PREFIX__-api-gateway:__IMAGE_TAG__
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: 8080
+      EUREKA_URI: http://discovery-service:8761/eureka/
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-finalcase-auth-service}
+    ports:
+      - "80:8080"
+    depends_on:
+      - discovery-service
+
+
+  auth-service:
+    image: __ECR_REGISTRY__/__ECR_REPOSITORY_PREFIX__-auth-service:__IMAGE_TAG__
+    restart: unless-stopped
+    environment:
+      <<: *aws-service-env
+      SPRING_APPLICATION_NAME: auth-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${RDS_HOSTNAME}:${RDS_PORT:-5432}/auth_db
+      SPRING_DATASOURCE_USERNAME: ${RDS_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${RDS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-finalcase-auth-service}
+      REFRESH_TOKEN_PEPPER: ${REFRESH_TOKEN_PEPPER}
+      AUTH_REFRESH_COOKIE_SECURE: "true"
+      AUTH_REFRESH_COOKIE_SAME_SITE: Strict
+    depends_on:
+      - rabbitmq
+      - discovery-service
+
+  user-service:
+    image: __ECR_REGISTRY__/__ECR_REPOSITORY_PREFIX__-user-service:__IMAGE_TAG__
+    restart: unless-stopped
+    environment:
+      <<: *aws-service-env
+      SPRING_APPLICATION_NAME: user-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${RDS_HOSTNAME}:${RDS_PORT:-5432}/user_db
+      SPRING_DATASOURCE_USERNAME: ${RDS_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${RDS_PASSWORD}
+    depends_on:
+      - rabbitmq
+      - discovery-service
+
+  catalog-service:
+    image: __ECR_REGISTRY__/__ECR_REPOSITORY_PREFIX__-catalog-service:__IMAGE_TAG__
+    restart: unless-stopped
+    environment:
+      <<: *aws-service-env
+      SPRING_APPLICATION_NAME: catalog-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${RDS_HOSTNAME}:${RDS_PORT:-5432}/catalog_db
+      SPRING_DATASOURCE_USERNAME: ${RDS_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${RDS_PASSWORD}
+    depends_on:
+      - rabbitmq
+      - discovery-service
+
+  search-service:
+    image: __ECR_REGISTRY__/__ECR_REPOSITORY_PREFIX__-search-service:__IMAGE_TAG__
+    restart: unless-stopped
+    environment:
+      <<: *aws-service-env
+      SPRING_APPLICATION_NAME: search-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${RDS_HOSTNAME}:${RDS_PORT:-5432}/search_db
+      SPRING_DATASOURCE_USERNAME: ${RDS_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${RDS_PASSWORD}
+    depends_on:
+      - rabbitmq
+      - discovery-service
+
+  basket-service:
+    image: __ECR_REGISTRY__/__ECR_REPOSITORY_PREFIX__-basket-service:__IMAGE_TAG__
+    restart: unless-stopped
+    environment:
+      <<: *aws-service-env
+      SPRING_APPLICATION_NAME: basket-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${RDS_HOSTNAME}:${RDS_PORT:-5432}/basket_db
+      SPRING_DATASOURCE_USERNAME: ${RDS_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${RDS_PASSWORD}
+    depends_on:
+      - rabbitmq
+      - discovery-service
+
+  inventory-service:
+    image: __ECR_REGISTRY__/__ECR_REPOSITORY_PREFIX__-inventory-service:__IMAGE_TAG__
+    restart: unless-stopped
+    environment:
+      <<: *aws-service-env
+      SPRING_APPLICATION_NAME: inventory-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${RDS_HOSTNAME}:${RDS_PORT:-5432}/inventory_db
+      SPRING_DATASOURCE_USERNAME: ${RDS_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${RDS_PASSWORD}
+    depends_on:
+      - rabbitmq
+      - discovery-service
+
+  promotion-service:
+    image: __ECR_REGISTRY__/__ECR_REPOSITORY_PREFIX__-promotion-service:__IMAGE_TAG__
+    restart: unless-stopped
+    environment:
+      <<: *aws-service-env
+      SPRING_APPLICATION_NAME: promotion-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${RDS_HOSTNAME}:${RDS_PORT:-5432}/promotion_db
+      SPRING_DATASOURCE_USERNAME: ${RDS_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${RDS_PASSWORD}
+    depends_on:
+      - rabbitmq
+      - discovery-service
+
+  checkout-service:
+    image: __ECR_REGISTRY__/__ECR_REPOSITORY_PREFIX__-checkout-service:__IMAGE_TAG__
+    restart: unless-stopped
+    environment:
+      <<: *aws-service-env
+      SPRING_APPLICATION_NAME: checkout-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${RDS_HOSTNAME}:${RDS_PORT:-5432}/checkout_db
+      SPRING_DATASOURCE_USERNAME: ${RDS_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${RDS_PASSWORD}
+    depends_on:
+      - rabbitmq
+      - discovery-service
+
+  order-service:
+    image: __ECR_REGISTRY__/__ECR_REPOSITORY_PREFIX__-order-service:__IMAGE_TAG__
+    restart: unless-stopped
+    environment:
+      <<: *aws-service-env
+      SPRING_APPLICATION_NAME: order-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${RDS_HOSTNAME}:${RDS_PORT:-5432}/order_db
+      SPRING_DATASOURCE_USERNAME: ${RDS_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${RDS_PASSWORD}
+    depends_on:
+      - rabbitmq
+      - discovery-service
+
+  payment-service:
+    image: __ECR_REGISTRY__/__ECR_REPOSITORY_PREFIX__-payment-service:__IMAGE_TAG__
+    restart: unless-stopped
+    environment:
+      <<: *aws-service-env
+      SPRING_APPLICATION_NAME: payment-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${RDS_HOSTNAME}:${RDS_PORT:-5432}/payment_db
+      SPRING_DATASOURCE_USERNAME: ${RDS_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${RDS_PASSWORD}
+      IYZICO_API_KEY: ${IYZICO_API_KEY}
+      IYZICO_SECRET_KEY: ${IYZICO_SECRET_KEY}
+      IYZICO_BASE_URL: ${IYZICO_BASE_URL}
+      PAYMENT_PUBLIC_BASE_URL: ${PAYMENT_PUBLIC_BASE_URL}
+    depends_on:
+      - rabbitmq
+      - discovery-service
+
+  shipment-service:
+    image: __ECR_REGISTRY__/__ECR_REPOSITORY_PREFIX__-shipment-service:__IMAGE_TAG__
+    restart: unless-stopped
+    environment:
+      <<: *aws-service-env
+      SPRING_APPLICATION_NAME: shipment-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${RDS_HOSTNAME}:${RDS_PORT:-5432}/shipment_db
+      SPRING_DATASOURCE_USERNAME: ${RDS_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${RDS_PASSWORD}
+    depends_on:
+      - rabbitmq
+      - discovery-service
+
+  notification-service:
+    image: __ECR_REGISTRY__/__ECR_REPOSITORY_PREFIX__-notification-service:__IMAGE_TAG__
+    restart: unless-stopped
+    environment:
+      <<: *aws-service-env
+      SPRING_APPLICATION_NAME: notification-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${RDS_HOSTNAME}:${RDS_PORT:-5432}/notification_db
+      SPRING_DATASOURCE_USERNAME: ${RDS_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${RDS_PASSWORD}
+    depends_on:
+      - rabbitmq
+      - discovery-service
+
+  review-service:
+    image: __ECR_REGISTRY__/__ECR_REPOSITORY_PREFIX__-review-service:__IMAGE_TAG__
+    restart: unless-stopped
+    environment:
+      <<: *aws-service-env
+      SPRING_APPLICATION_NAME: review-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${RDS_HOSTNAME}:${RDS_PORT:-5432}/review_db
+      SPRING_DATASOURCE_USERNAME: ${RDS_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${RDS_PASSWORD}
+    depends_on:
+      - rabbitmq
+      - discovery-service
+

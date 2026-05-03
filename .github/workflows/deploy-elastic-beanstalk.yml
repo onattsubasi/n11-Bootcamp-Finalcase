@@ -1,0 +1,98 @@
+name: Deploy to AWS Elastic Beanstalk
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-eb-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY_PREFIX: ${{ secrets.ECR_REPOSITORY_PREFIX }}
+  EB_APPLICATION_NAME: ${{ secrets.EB_APPLICATION_NAME }}
+  EB_ENVIRONMENT_NAME: ${{ secrets.EB_ENVIRONMENT_NAME }}
+  EB_DEPLOY_BUCKET: ${{ secrets.EB_DEPLOY_BUCKET }}
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Compile backend
+        working-directory: backend
+        run: mvn -B -ntp clean verify
+
+      - name: Build and push service images with Jib
+        working-directory: backend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+          services="discovery-service api-gateway auth-service user-service catalog-service search-service basket-service inventory-service promotion-service checkout-service order-service payment-service shipment-service notification-service review-service"
+          for service in $services; do
+            repo="${ECR_REPOSITORY_PREFIX}-${service}"
+            aws ecr describe-repositories --repository-names "$repo" >/dev/null 2>&1 ||               aws ecr create-repository --repository-name "$repo" >/dev/null
+
+            module="services/$service"
+            image="$ECR_REGISTRY/$repo:$IMAGE_TAG"
+            echo "Building $module -> $image"
+            mvn -B -ntp -pl "$module" -am compile com.google.cloud.tools:jib-maven-plugin:3.4.5:build -Dimage="$image"
+          done
+
+      - name: Render Elastic Beanstalk docker-compose.yml
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+          mkdir -p eb-package
+          sed             -e "s#__ECR_REGISTRY__#$ECR_REGISTRY#g"             -e "s#__ECR_REPOSITORY_PREFIX__#$ECR_REPOSITORY_PREFIX#g"             -e "s#__IMAGE_TAG__#$IMAGE_TAG#g"             deploy/aws/elasticbeanstalk/docker-compose.aws-eb.template.yml > eb-package/docker-compose.yml
+          cd eb-package
+          zip -r ../finalcase-eb-${IMAGE_TAG}.zip docker-compose.yml
+
+      - name: Upload deployment bundle to S3
+        run: |
+          aws s3 cp "finalcase-eb-${IMAGE_TAG}.zip" "s3://${EB_DEPLOY_BUCKET}/finalcase-eb-${IMAGE_TAG}.zip"
+
+      - name: Create Elastic Beanstalk application version
+        run: |
+          aws elasticbeanstalk create-application-version             --application-name "$EB_APPLICATION_NAME"             --version-label "$IMAGE_TAG"             --source-bundle S3Bucket="$EB_DEPLOY_BUCKET",S3Key="finalcase-eb-${IMAGE_TAG}.zip"
+
+      - name: Deploy Elastic Beanstalk application version
+        run: |
+          aws elasticbeanstalk update-environment             --application-name "$EB_APPLICATION_NAME"             --environment-name "$EB_ENVIRONMENT_NAME"             --version-label "$IMAGE_TAG"
+
+      - name: Notify Slack
+        if: always()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          if [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
+            curl -X POST -H 'Content-type: application/json'               --data "{"text":"Finalcase Elastic Beanstalk deploy status: $JOB_STATUS | commit: $IMAGE_TAG"}"               "$SLACK_WEBHOOK_URL"
+          fi

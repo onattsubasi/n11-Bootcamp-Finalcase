@@ -1,0 +1,14 @@
+# Lightweight local demo override.
+# Usage:
+# docker compose --env-file .env -f docker-compose.yml -f docker-compose.lite.yml up -d
+# This file disables selected secondary services by putting them behind a profile.
+
+services:
+  review-service:
+    profiles: ["full"]
+  notification-service:
+    profiles: ["full"]
+  shipment-service:
+    profiles: ["full"]
+  search-service:
+    profiles: ["full"]

@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: shipment-service-test
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+
+  flyway:
+    enabled: true
+
+  cloud:
+    discovery:
+      enabled: false
+    openfeign:
+      circuitbreaker:
+        enabled: false
+
+eureka:
+  client:
+    enabled: false
+
+shipment:
+  default-carrier: MANUAL
+  auto-mark-ready-to-ship: true

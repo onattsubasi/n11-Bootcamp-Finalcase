@@ -1,0 +1,370 @@
+name: finalcase
+
+x-common-service-env: &common-service-env
+  SPRING_PROFILES_ACTIVE: docker
+  SERVER_PORT: 8080
+  EUREKA_URI: http://discovery-service:8761/eureka/
+  SPRING_RABBITMQ_HOST: rabbitmq
+  SPRING_RABBITMQ_PORT: 5672
+  SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-finalcase}
+  SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS:-finalcase}
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus
+  MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: when_authorized
+  MANAGEMENT_TRACING_SAMPLING_PROBABILITY: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:-1.0}
+  MANAGEMENT_OTLP_TRACING_ENDPOINT: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:-http://otel-collector:4318/v1/traces}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-finalcase}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - finalcase-net
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-finalcase}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-finalcase}
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./infra/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./infra/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - finalcase-net
+
+  discovery-service:
+    image: finalcase/discovery-service:local
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SERVER_PORT: 8761
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "false"
+      EUREKA_CLIENT_FETCH_REGISTRY: "false"
+    ports:
+      - "${EUREKA_PORT:-18761}:8761"
+    networks:
+      - finalcase-net
+
+  api-gateway:
+    image: finalcase/api-gateway:local
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SERVER_PORT: 8080
+      EUREKA_URI: http://discovery-service:8761/eureka/
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-finalcase-auth-service}
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:-1.0}
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:-http://otel-collector:4318/v1/traces}
+    depends_on:
+      discovery-service:
+        condition: service_started
+    ports:
+      - "${API_GATEWAY_PORT:-18080}:8080"
+    networks:
+      - finalcase-net
+
+
+  auth-service:
+    image: finalcase/auth-service:local
+    restart: unless-stopped
+    environment:
+      <<: *common-service-env
+      SPRING_APPLICATION_NAME: auth-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/auth_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-finalcase-auth-service}
+      JWT_ACCESS_TOKEN_EXPIRATION_MS: ${JWT_ACCESS_TOKEN_EXPIRATION_MS:-900000}
+      REFRESH_TOKEN_PEPPER: ${REFRESH_TOKEN_PEPPER}
+      REFRESH_TOKEN_EXPIRATION_SECONDS: ${REFRESH_TOKEN_EXPIRATION_SECONDS:-604800}
+      AUTH_REFRESH_COOKIE_SECURE: ${AUTH_REFRESH_COOKIE_SECURE:-false}
+      AUTH_REFRESH_COOKIE_SAME_SITE: ${AUTH_REFRESH_COOKIE_SAME_SITE:-Strict}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - finalcase-net
+
+  user-service:
+    image: finalcase/user-service:local
+    restart: unless-stopped
+    environment:
+      <<: *common-service-env
+      SPRING_APPLICATION_NAME: user-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/user_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - finalcase-net
+
+  catalog-service:
+    image: finalcase/catalog-service:local
+    restart: unless-stopped
+    environment:
+      <<: *common-service-env
+      SPRING_APPLICATION_NAME: catalog-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/catalog_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - finalcase-net
+
+  search-service:
+    image: finalcase/search-service:local
+    restart: unless-stopped
+    environment:
+      <<: *common-service-env
+      SPRING_APPLICATION_NAME: search-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/search_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - finalcase-net
+
+  basket-service:
+    image: finalcase/basket-service:local
+    restart: unless-stopped
+    environment:
+      <<: *common-service-env
+      SPRING_APPLICATION_NAME: basket-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/basket_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - finalcase-net
+
+  inventory-service:
+    image: finalcase/inventory-service:local
+    restart: unless-stopped
+    environment:
+      <<: *common-service-env
+      SPRING_APPLICATION_NAME: inventory-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/inventory_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - finalcase-net
+
+  promotion-service:
+    image: finalcase/promotion-service:local
+    restart: unless-stopped
+    environment:
+      <<: *common-service-env
+      SPRING_APPLICATION_NAME: promotion-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/promotion_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - finalcase-net
+
+  checkout-service:
+    image: finalcase/checkout-service:local
+    restart: unless-stopped
+    environment:
+      <<: *common-service-env
+      SPRING_APPLICATION_NAME: checkout-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/checkout_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - finalcase-net
+
+  order-service:
+    image: finalcase/order-service:local
+    restart: unless-stopped
+    environment:
+      <<: *common-service-env
+      SPRING_APPLICATION_NAME: order-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/order_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - finalcase-net
+
+  payment-service:
+    image: finalcase/payment-service:local
+    restart: unless-stopped
+    environment:
+      <<: *common-service-env
+      SPRING_APPLICATION_NAME: payment-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/payment_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
+      IYZICO_API_KEY: ${IYZICO_API_KEY}
+      IYZICO_SECRET_KEY: ${IYZICO_SECRET_KEY}
+      IYZICO_BASE_URL: ${IYZICO_BASE_URL:-https://sandbox-api.iyzipay.com}
+      PAYMENT_PUBLIC_BASE_URL: ${PAYMENT_PUBLIC_BASE_URL:-http://localhost:18080}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - finalcase-net
+
+  shipment-service:
+    image: finalcase/shipment-service:local
+    restart: unless-stopped
+    environment:
+      <<: *common-service-env
+      SPRING_APPLICATION_NAME: shipment-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/shipment_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - finalcase-net
+
+  notification-service:
+    image: finalcase/notification-service:local
+    restart: unless-stopped
+    environment:
+      <<: *common-service-env
+      SPRING_APPLICATION_NAME: notification-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/notification_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - finalcase-net
+
+  review-service:
+    image: finalcase/review-service:local
+    restart: unless-stopped
+    environment:
+      <<: *common-service-env
+      SPRING_APPLICATION_NAME: review-service
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/review_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-service:
+        condition: service_started
+    networks:
+      - finalcase-net
+
+  frontend:
+    image: finalcase/frontend:local
+    restart: unless-stopped
+    profiles: ["frontend"]
+    environment:
+      VITE_API_BASE_URL: http://localhost:${API_GATEWAY_PORT:-18080}
+    ports:
+      - "${FRONTEND_PORT:-13000}:80"
+    depends_on:
+      - api-gateway
+    networks:
+      - finalcase-net
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  finalcase-net:
+    driver: bridge

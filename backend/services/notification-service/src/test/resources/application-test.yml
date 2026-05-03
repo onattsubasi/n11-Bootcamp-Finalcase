@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: notification-service
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  cloud:
+    discovery:
+      enabled: false
+  rabbitmq:
+    listener:
+      simple:
+        auto-startup: false
+
+eureka:
+  client:
+    enabled: false
+
+notification:
+  default-locale: tr
+  max-delivery-attempts: 3
+  retry-batch-size: 10
+  first-retry-delay-seconds: 1
+  second-retry-delay-seconds: 2
+  fallback-retry-delay-seconds: 3
+  retry-scheduler-delay-ms: 600000
