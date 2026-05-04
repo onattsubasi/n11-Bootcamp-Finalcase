@@ -56,5 +56,5 @@ jobs:
       - name: Build frontend
         env:
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
-          VITE_APP_ENV: production
+          VITE_APP_ENV: ${{ vars.VITE_APP_ENV || 'production' }}
         run: npm run build

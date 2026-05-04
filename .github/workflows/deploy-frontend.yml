@@ -24,6 +24,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate required repository variables
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          missing=0
+
+          if [ -z "${{ vars.FRONTEND_APP_NAME }}" ]; then
+            echo "::error::Missing GitHub repository variable: FRONTEND_APP_NAME"
+            missing=1
+          fi
+
+          if [ -z "${{ vars.VITE_API_BASE_URL }}" ]; then
+            echo "::error::Missing GitHub repository variable: VITE_API_BASE_URL"
+            missing=1
+          fi
+
+          if [ "${missing}" -ne 0 ]; then
+            echo "Go to Repository Settings → Secrets and variables → Actions → Variables → Repository variables"
+            exit 1
+          fi
+
       - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
@@ -37,7 +59,7 @@ jobs:
       - name: Build frontend
         env:
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
-          VITE_APP_ENV: production
+          VITE_APP_ENV: ${{ vars.VITE_APP_ENV || 'production' }}
         run: npm run build
 
       - name: Deploy to DigitalOcean App Platform
@@ -54,37 +76,24 @@ jobs:
           JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
-          if [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
-            python - <<'PY' > slack-payload.json
-          import json
-          import os
 
-          status = os.environ.get("JOB_STATUS", "unknown")
-          repo = os.environ.get("GITHUB_REPOSITORY", "")
-          ref = os.environ.get("GITHUB_REF_NAME", "")
-          run_id = os.environ.get("GITHUB_RUN_ID", "")
-          server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
-          run_url = f"{server}/{repo}/actions/runs/{run_id}" if repo and run_id else ""
-
-          ok = status == "success"
-          emoji = "✅" if ok else "❌"
-          color = "good" if ok else "danger"
-
-          payload = {
-              "text": f"{emoji} Finalcase frontend DigitalOcean deploy: {status}",
-              "attachments": [
-                  {
-                      "fallback": f"Finalcase frontend deploy {status}",
-                      "color": color,
-                      "fields": [
-                          {"title": "Repository", "value": repo, "short": True},
-                          {"title": "Branch", "value": ref, "short": True},
-                          {"title": "Run", "value": f"<{run_url}|Open GitHub Actions run>" if run_url else "-", "short": False},
-                      ],
-                  }
-              ],
-          }
-          print(json.dumps(payload))
-          PY
-            curl -X POST -H 'Content-type: application/json' --data @slack-payload.json "${SLACK_WEBHOOK_URL}"
+          if [ -z "${SLACK_WEBHOOK_URL:-}" ]; then
+            echo "SLACK_WEBHOOK_URL is not configured. Skipping Slack notification."
+            exit 0
           fi
+
+          if [ "${JOB_STATUS}" = "success" ]; then
+            EMOJI="✅"
+          else
+            EMOJI="❌"
+          fi
+
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          cat > slack-payload.json <<EOF
+          {
+            "text": "${EMOJI} Finalcase frontend DigitalOcean deploy: ${JOB_STATUS}\nRepository: ${GITHUB_REPOSITORY}\nBranch: ${GITHUB_REF_NAME}\nRun: ${RUN_URL}"
+          }
+          EOF
+
+          curl -X POST -H "Content-type: application/json" --data @slack-payload.json "${SLACK_WEBHOOK_URL}"

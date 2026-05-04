@@ -21,8 +21,15 @@ modules=(
   "services/review-service"
 )
 
+echo "Installing backend modules into local Maven repository..."
+mvn -B -ntp clean install -DskipTests
+
 for module in "${modules[@]}"; do
   service="$(basename "$module")"
-  echo "Building $service with Jib..."
-  ./mvnw -B -ntp -pl "$module" -am compile com.google.cloud.tools:jib-maven-plugin:3.4.5:dockerBuild     -Dimage="finalcase/$service:local"
+  image="finalcase/${service}:local"
+
+  echo "Building $service with Jib as $image..."
+  mvn -B -ntp -pl "$module" -DskipTests package \
+    com.google.cloud.tools:jib-maven-plugin:3.4.5:dockerBuild \
+    -Dimage="$image"
 done
