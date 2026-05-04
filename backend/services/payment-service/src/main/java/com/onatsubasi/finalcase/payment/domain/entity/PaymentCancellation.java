@@ -1,30 +1,28 @@
-package com.onatsubasi.finalcase.payment.domain.model;
+package com.onatsubasi.finalcase.payment.domain.entity;
 
 import com.onatsubasi.finalcase.common.core.exception.BaseException;
-import com.onatsubasi.finalcase.payment.domain.enums.RefundStatus;
+import com.onatsubasi.finalcase.payment.domain.enums.CancellationStatus;
 import com.onatsubasi.finalcase.payment.domain.exception.PaymentErrorCode;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
-import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.Locale;
 import java.util.UUID;
 
 @Entity
 @Table(
-        name = "payment_refunds",
+        name = "payment_cancellations",
         indexes = {
-                @Index(name = "idx_payment_refunds_payment_id", columnList = "payment_id"),
-                @Index(name = "idx_payment_refunds_idempotency_key", columnList = "idempotency_key", unique = true),
-                @Index(name = "idx_payment_refunds_status", columnList = "status")
+                @Index(name = "idx_payment_cancellations_payment_id", columnList = "payment_id"),
+                @Index(name = "idx_payment_cancellations_idempotency_key", columnList = "idempotency_key", unique = true),
+                @Index(name = "idx_payment_cancellations_status", columnList = "status")
         }
 )
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EqualsAndHashCode(of = "id")
-public class PaymentRefund {
+public class PaymentCancellation {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -41,18 +39,12 @@ public class PaymentRefund {
     @Column(name = "request_hash", nullable = false, length = 128)
     private String requestHash;
 
-    @Column(nullable = false, precision = 19, scale = 2)
-    private BigDecimal amount;
-
-    @Column(nullable = false, length = 3)
-    private String currency;
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 40)
-    private RefundStatus status;
+    private CancellationStatus status;
 
-    @Column(name = "provider_refund_id", length = 150)
-    private String providerRefundId;
+    @Column(name = "provider_cancel_id", length = 150)
+    private String providerCancelId;
 
     @Column(name = "provider_status", length = 100)
     private String providerStatus;
@@ -67,12 +59,10 @@ public class PaymentRefund {
     @Column(name = "completed_at")
     private Instant completedAt;
 
-    public PaymentRefund(
+    public PaymentCancellation(
             Payment payment,
             String idempotencyKey,
-            String requestHash,
-            BigDecimal amount,
-            String currency
+            String requestHash
     ) {
         if (payment == null) {
             throw new BaseException(PaymentErrorCode.PAYMENT_NOT_FOUND);
@@ -81,18 +71,10 @@ public class PaymentRefund {
         validateRequired(idempotencyKey, "Idempotency key is required");
         validateRequired(requestHash, "Request hash is required");
 
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BaseException(PaymentErrorCode.PAYMENT_REFUND_AMOUNT_INVALID);
-        }
-
-        validateCurrency(currency);
-
         this.payment = payment;
         this.idempotencyKey = idempotencyKey.trim();
         this.requestHash = requestHash.trim();
-        this.amount = amount;
-        this.currency = currency.trim().toUpperCase(Locale.ROOT);
-        this.status = RefundStatus.REQUESTED;
+        this.status = CancellationStatus.REQUESTED;
     }
 
     public void validateSameRequest(String requestHash) {
@@ -101,30 +83,24 @@ public class PaymentRefund {
         }
     }
 
-    public void markSucceeded(String providerRefundId, String providerStatus) {
-        this.providerRefundId = normalize(providerRefundId);
+    public void markSucceeded(String providerCancelId, String providerStatus) {
+        this.providerCancelId = normalize(providerCancelId);
         this.providerStatus = normalize(providerStatus);
         this.failureReason = null;
-        this.status = RefundStatus.SUCCEEDED;
+        this.status = CancellationStatus.SUCCEEDED;
         this.completedAt = Instant.now();
     }
 
     public void markFailed(String providerStatus, String failureReason) {
         this.providerStatus = normalize(providerStatus);
         this.failureReason = normalize(failureReason);
-        this.status = RefundStatus.FAILED;
+        this.status = CancellationStatus.FAILED;
         this.completedAt = Instant.now();
     }
 
     private void validateRequired(String value, String message) {
         if (value == null || value.isBlank()) {
             throw new BaseException(PaymentErrorCode.INVALID_PAYMENT_DATA, message);
-        }
-    }
-
-    private void validateCurrency(String currency) {
-        if (currency == null || currency.isBlank() || currency.trim().length() != 3) {
-            throw new BaseException(PaymentErrorCode.PAYMENT_CURRENCY_INVALID);
         }
     }
 

@@ -1,6 +1,6 @@
 package com.onatsubasi.finalcase.payment.infrastructure.persistence;
 
-import com.onatsubasi.finalcase.payment.domain.model.Payment;
+import com.onatsubasi.finalcase.payment.domain.entity.Payment;
 import com.onatsubasi.finalcase.payment.domain.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;

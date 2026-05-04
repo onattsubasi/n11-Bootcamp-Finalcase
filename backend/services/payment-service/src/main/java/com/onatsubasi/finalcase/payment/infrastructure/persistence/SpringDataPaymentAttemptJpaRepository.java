@@ -1,6 +1,6 @@
 package com.onatsubasi.finalcase.payment.infrastructure.persistence;
 
-import com.onatsubasi.finalcase.payment.domain.model.PaymentAttempt;
+import com.onatsubasi.finalcase.payment.domain.entity.PaymentAttempt;
 import com.onatsubasi.finalcase.payment.domain.enums.PaymentProviderCode;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;

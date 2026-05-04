@@ -1,6 +1,6 @@
 package com.onatsubasi.finalcase.payment.infrastructure.persistence;
 
-import com.onatsubasi.finalcase.payment.domain.model.PaymentCancellation;
+import com.onatsubasi.finalcase.payment.domain.entity.PaymentCancellation;
 import com.onatsubasi.finalcase.payment.domain.repository.PaymentCancellationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;

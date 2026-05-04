@@ -1,6 +1,6 @@
 package com.onatsubasi.finalcase.payment.infrastructure.persistence;
 
-import com.onatsubasi.finalcase.payment.domain.model.PaymentCallback;
+import com.onatsubasi.finalcase.payment.domain.entity.PaymentCallback;
 import com.onatsubasi.finalcase.payment.domain.enums.PaymentProviderCode;
 import com.onatsubasi.finalcase.payment.domain.repository.PaymentCallbackRepository;
 import lombok.RequiredArgsConstructor;

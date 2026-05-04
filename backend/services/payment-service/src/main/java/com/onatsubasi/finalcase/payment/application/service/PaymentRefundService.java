@@ -10,9 +10,9 @@ import com.onatsubasi.finalcase.payment.application.dto.response.PaymentRefundRe
 import com.onatsubasi.finalcase.payment.application.port.PaymentEventPublisher;
 import com.onatsubasi.finalcase.payment.application.port.PaymentProviderPort;
 import com.onatsubasi.finalcase.payment.domain.exception.PaymentErrorCode;
-import com.onatsubasi.finalcase.payment.domain.model.Payment;
-import com.onatsubasi.finalcase.payment.domain.model.PaymentCancellation;
-import com.onatsubasi.finalcase.payment.domain.model.PaymentRefund;
+import com.onatsubasi.finalcase.payment.domain.entity.Payment;
+import com.onatsubasi.finalcase.payment.domain.entity.PaymentCancellation;
+import com.onatsubasi.finalcase.payment.domain.entity.PaymentRefund;
 import com.onatsubasi.finalcase.payment.domain.repository.PaymentCancellationRepository;
 import com.onatsubasi.finalcase.payment.domain.repository.PaymentRefundRepository;
 import com.onatsubasi.finalcase.payment.domain.repository.PaymentRepository;

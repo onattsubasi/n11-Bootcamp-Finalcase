@@ -1,4 +1,4 @@
-package com.onatsubasi.finalcase.payment.domain.model;
+package com.onatsubasi.finalcase.payment.domain.entity;
 
 import com.onatsubasi.finalcase.common.core.exception.BaseException;
 import com.onatsubasi.finalcase.payment.domain.enums.PaymentProviderCode;

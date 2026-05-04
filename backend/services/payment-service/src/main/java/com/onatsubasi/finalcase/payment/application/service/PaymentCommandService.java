@@ -10,9 +10,9 @@ import com.onatsubasi.finalcase.payment.application.dto.request.InitializePaymen
 import com.onatsubasi.finalcase.payment.application.dto.response.PaymentInitializeResponse;
 import com.onatsubasi.finalcase.payment.domain.exception.PaymentErrorCode;
 import com.onatsubasi.finalcase.payment.infrastructure.mapper.PaymentMapper;
-import com.onatsubasi.finalcase.payment.domain.model.Payment;
-import com.onatsubasi.finalcase.payment.domain.model.PaymentIdempotencyRecord;
-import com.onatsubasi.finalcase.payment.domain.model.PaymentAttempt;
+import com.onatsubasi.finalcase.payment.domain.entity.Payment;
+import com.onatsubasi.finalcase.payment.domain.entity.PaymentIdempotencyRecord;
+import com.onatsubasi.finalcase.payment.domain.entity.PaymentAttempt;
 import com.onatsubasi.finalcase.payment.domain.enums.PaymentStatus;
 import com.onatsubasi.finalcase.payment.domain.repository.PaymentAttemptRepository;
 import com.onatsubasi.finalcase.payment.domain.repository.PaymentRepository;

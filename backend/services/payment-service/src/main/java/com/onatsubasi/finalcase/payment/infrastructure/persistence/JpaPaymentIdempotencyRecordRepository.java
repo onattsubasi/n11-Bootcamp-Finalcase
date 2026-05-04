@@ -1,6 +1,6 @@
 package com.onatsubasi.finalcase.payment.infrastructure.persistence;
 
-import com.onatsubasi.finalcase.payment.domain.model.PaymentIdempotencyRecord;
+import com.onatsubasi.finalcase.payment.domain.entity.PaymentIdempotencyRecord;
 import com.onatsubasi.finalcase.payment.domain.repository.PaymentIdempotencyRecordRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;

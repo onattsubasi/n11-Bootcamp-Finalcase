@@ -1,4 +1,4 @@
-package com.onatsubasi.finalcase.payment.domain.model;
+package com.onatsubasi.finalcase.payment.domain.entity;
 
 import java.time.Instant;
 import java.util.HashMap;

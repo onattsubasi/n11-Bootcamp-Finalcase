@@ -1,8 +1,8 @@
 package com.onatsubasi.finalcase.payment.application.port;
 
-import com.onatsubasi.finalcase.payment.domain.model.Payment;
-import com.onatsubasi.finalcase.payment.domain.model.PaymentCancellation;
-import com.onatsubasi.finalcase.payment.domain.model.PaymentRefund;
+import com.onatsubasi.finalcase.payment.domain.entity.Payment;
+import com.onatsubasi.finalcase.payment.domain.entity.PaymentCancellation;
+import com.onatsubasi.finalcase.payment.domain.entity.PaymentRefund;
 
 public interface PaymentEventPublisher {
 

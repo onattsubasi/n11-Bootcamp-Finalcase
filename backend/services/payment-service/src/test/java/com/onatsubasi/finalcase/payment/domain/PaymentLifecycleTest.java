@@ -4,7 +4,7 @@ import com.onatsubasi.finalcase.common.core.exception.BaseException;
 import com.onatsubasi.finalcase.payment.domain.enums.PaymentMethod;
 import com.onatsubasi.finalcase.payment.domain.enums.PaymentProviderCode;
 import com.onatsubasi.finalcase.payment.domain.enums.PaymentStatus;
-import com.onatsubasi.finalcase.payment.domain.model.Payment;
+import com.onatsubasi.finalcase.payment.domain.entity.Payment;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;

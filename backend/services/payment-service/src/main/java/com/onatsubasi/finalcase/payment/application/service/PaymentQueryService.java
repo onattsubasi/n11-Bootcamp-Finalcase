@@ -6,7 +6,7 @@ import com.onatsubasi.finalcase.payment.application.dto.response.PaymentDetailRe
 import com.onatsubasi.finalcase.payment.application.dto.response.PaymentRefundResponse;
 import com.onatsubasi.finalcase.payment.application.dto.response.PaymentSummaryResponse;
 import com.onatsubasi.finalcase.payment.infrastructure.mapper.PaymentMapper;
-import com.onatsubasi.finalcase.payment.domain.model.Payment;
+import com.onatsubasi.finalcase.payment.domain.entity.Payment;
 import com.onatsubasi.finalcase.payment.domain.repository.PaymentRefundRepository;
 import com.onatsubasi.finalcase.payment.domain.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;

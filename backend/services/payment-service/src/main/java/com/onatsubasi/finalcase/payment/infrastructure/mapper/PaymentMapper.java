@@ -14,10 +14,10 @@ import com.onatsubasi.finalcase.payment.application.dto.request.InitializePaymen
 import com.onatsubasi.finalcase.payment.application.dto.request.RefundPaymentRequest;
 import com.onatsubasi.finalcase.payment.application.dto.response.*;
 import com.onatsubasi.finalcase.payment.infrastructure.config.PaymentServiceProperties;
-import com.onatsubasi.finalcase.payment.domain.model.Payment;
-import com.onatsubasi.finalcase.payment.domain.model.PaymentAttempt;
-import com.onatsubasi.finalcase.payment.domain.model.PaymentCancellation;
-import com.onatsubasi.finalcase.payment.domain.model.PaymentRefund;
+import com.onatsubasi.finalcase.payment.domain.entity.Payment;
+import com.onatsubasi.finalcase.payment.domain.entity.PaymentAttempt;
+import com.onatsubasi.finalcase.payment.domain.entity.PaymentCancellation;
+import com.onatsubasi.finalcase.payment.domain.entity.PaymentRefund;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

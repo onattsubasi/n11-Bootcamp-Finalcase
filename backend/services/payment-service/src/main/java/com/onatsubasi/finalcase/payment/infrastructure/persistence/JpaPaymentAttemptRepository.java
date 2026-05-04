@@ -1,6 +1,6 @@
 package com.onatsubasi.finalcase.payment.infrastructure.persistence;
 
-import com.onatsubasi.finalcase.payment.domain.model.PaymentAttempt;
+import com.onatsubasi.finalcase.payment.domain.entity.PaymentAttempt;
 import com.onatsubasi.finalcase.payment.domain.enums.PaymentProviderCode;
 import com.onatsubasi.finalcase.payment.domain.repository.PaymentAttemptRepository;
 import lombok.RequiredArgsConstructor;

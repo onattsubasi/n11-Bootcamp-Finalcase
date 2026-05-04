@@ -6,7 +6,7 @@ import com.onatsubasi.finalcase.payment.application.dto.provider.ProviderBuyerIn
 import com.onatsubasi.finalcase.payment.application.dto.request.InitializePaymentRequest;
 import com.onatsubasi.finalcase.payment.domain.enums.PaymentMethod;
 import com.onatsubasi.finalcase.payment.domain.enums.PaymentProviderCode;
-import com.onatsubasi.finalcase.payment.domain.model.Payment;
+import com.onatsubasi.finalcase.payment.domain.entity.Payment;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;

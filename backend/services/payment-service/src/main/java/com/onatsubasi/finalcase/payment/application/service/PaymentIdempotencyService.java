@@ -11,11 +11,11 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.onatsubasi.finalcase.common.core.exception.BaseException;
 import com.onatsubasi.finalcase.payment.application.dto.response.PaymentInitializeResponse;
-import com.onatsubasi.finalcase.payment.domain.model.Payment;
-import com.onatsubasi.finalcase.payment.domain.model.PaymentAttempt;
+import com.onatsubasi.finalcase.payment.domain.entity.Payment;
+import com.onatsubasi.finalcase.payment.domain.entity.PaymentAttempt;
 import com.onatsubasi.finalcase.payment.domain.repository.PaymentIdempotencyRecordRepository;
 import com.onatsubasi.finalcase.payment.domain.exception.PaymentErrorCode;
-import com.onatsubasi.finalcase.payment.domain.model.PaymentIdempotencyRecord;
+import com.onatsubasi.finalcase.payment.domain.entity.PaymentIdempotencyRecord;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
