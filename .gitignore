@@ -59,10 +59,6 @@ bin/
 !mvnw.cmd
 !.mvn/wrapper/maven-wrapper.properties
 
-# Maven local repository must not be committed.
-.m2/
-repository/
-
 # ---------------------------------------------------------
 # Test reports / coverage
 # ---------------------------------------------------------
