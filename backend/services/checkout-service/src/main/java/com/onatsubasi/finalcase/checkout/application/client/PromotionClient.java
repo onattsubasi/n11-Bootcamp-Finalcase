@@ -4,6 +4,8 @@ import com.onatsubasi.finalcase.checkout.application.dto.client.PromotionQuoteCl
 import com.onatsubasi.finalcase.checkout.application.dto.client.PromotionQuoteClientResponse;
 import com.onatsubasi.finalcase.checkout.application.dto.client.PromotionUsageReservationClientResponse;
 import com.onatsubasi.finalcase.checkout.application.dto.client.PromotionUsageReserveClientRequest;
+import com.onatsubasi.finalcase.checkout.application.dto.client.PromotionUsageCancelClientRequest;
+import com.onatsubasi.finalcase.checkout.application.dto.client.PromotionUsageRedeemClientRequest;
 import com.onatsubasi.finalcase.checkout.infrastructure.config.FeignConfig;
 import com.onatsubasi.finalcase.common.core.response.ApiResponse;
 import org.springframework.cloud.openfeign.FeignClient;
@@ -32,15 +34,15 @@ public interface PromotionClient {
             @RequestBody PromotionUsageReserveClientRequest request
     );
 
-    @PostMapping("/usage-reservations/orders/{orderId}/redeem")
+    @PostMapping("/usage-reservations/{reservationId}/redeem")
     ApiResponse<PromotionUsageReservationClientResponse> redeemUsage(
-            @RequestHeader("Idempotency-Key") String idempotencyKey,
-            @PathVariable UUID orderId
+            @PathVariable UUID reservationId,
+            @RequestBody PromotionUsageRedeemClientRequest request
     );
 
-    @PostMapping("/usage-reservations/orders/{orderId}/cancel")
+    @PostMapping("/usage-reservations/{reservationId}/cancel")
     ApiResponse<PromotionUsageReservationClientResponse> cancelUsage(
-            @RequestHeader("Idempotency-Key") String idempotencyKey,
-            @PathVariable UUID orderId
+            @PathVariable UUID reservationId,
+            @RequestBody PromotionUsageCancelClientRequest request
     );
 }

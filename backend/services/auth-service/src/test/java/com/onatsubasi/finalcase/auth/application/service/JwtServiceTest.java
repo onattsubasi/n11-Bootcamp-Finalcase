@@ -12,6 +12,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import javax.crypto.SecretKey;
 import java.util.Base64;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -52,9 +53,17 @@ class JwtServiceTest {
 
         assertThat(claims.getSubject()).isEqualTo(userId.toString());
         assertThat(claims.getIssuer()).isEqualTo(ISSUER);
-        assertThat(claims.get("userId")).isEqualTo(userId.toString());
-        assertThat(claims.get("email")).isEqualTo(email);
-        assertThat(claims.get("roles")).asList().containsExactlyInAnyOrder("ADMIN", "CUSTOMER");
+        assertThat(claims)
+                .containsEntry("userId", userId.toString())
+                .containsEntry("email", email);
+
+        List<String> roleClaims = ((List<?>) claims.get("roles"))
+                .stream()
+                .map(String::valueOf)
+                .toList();
+
+        assertThat(roleClaims).containsExactlyInAnyOrder("ADMIN", "CUSTOMER");
+
         assertThat(claims.getExpiration()).isAfter(claims.getIssuedAt());
     }
 

@@ -78,14 +78,20 @@ public class CheckoutFinalizationService {
 
             if (!session.isStepCompleted(CheckoutSagaStepName.INVENTORY_CONFIRMED)
                     && session.getInventoryReservationId() != null) {
-                downstreamGateway.confirmReservation(session.getInventoryReservationId());
+                downstreamGateway.confirmReservation(
+                        session.getInventoryReservationId(),
+                        session.getOrderId()
+                );
                 session.completeStep(CheckoutSagaStepName.INVENTORY_CONFIRMED);
             }
 
             if (!session.isStepCompleted(CheckoutSagaStepName.PROMOTION_REDEEMED)
                     && session.getOrderId() != null
                     && session.getPromotionUsageReservationId() != null) {
-                downstreamGateway.redeemPromotionUsage(session.getOrderId());
+                downstreamGateway.redeemPromotionUsage(
+                        session.getPromotionUsageReservationId(),
+                        session.getOrderId()
+                );
                 session.completeStep(CheckoutSagaStepName.PROMOTION_REDEEMED);
             }
 

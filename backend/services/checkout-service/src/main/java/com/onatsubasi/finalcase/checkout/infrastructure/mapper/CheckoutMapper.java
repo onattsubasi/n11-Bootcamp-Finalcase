@@ -81,12 +81,11 @@ public class CheckoutMapper {
     ) {
         return new InventoryReserveClientRequest(
                 checkoutId,
-                basket.basketId(),
                 basket.userId(),
                 basket.items()
                         .stream()
                         .map(item -> new InventoryReserveItemClientRequest(
-                                item.productId(),
+                                requiredUuid(item.productId(), "Product id is invalid"),
                                 item.quantity()
                         ))
                         .toList()
@@ -101,8 +100,6 @@ public class CheckoutMapper {
     ) {
         return new PromotionQuoteClientRequest(
                 basket.userId(),
-                safe(basket.subtotalAmount()),
-                safe(shippingFee),
                 couponCode,
                 basket.items()
                         .stream()
@@ -111,35 +108,54 @@ public class CheckoutMapper {
                                     findProduct(products, item.productId());
 
                             return new PromotionQuoteItemClientRequest(
-                                    item.productId(),
-                                    product.categoryId(),
-                                    product.brandId(),
+                                    requiredUuid(item.productId(), "Product id is invalid"),
+                                    nullableUuid(product.categoryId()),
+                                    nullableUuid(product.brandId()),
                                     item.unitPrice(),
                                     item.quantity()
                             );
                         })
-                        .toList()
+                        .toList(),
+                safe(shippingFee),
+                basket.currency()
         );
     }
 
     public PromotionUsageReserveClientRequest toPromotionUsageReserveRequest(
-            UUID orderId,
+            UUID checkoutId,
             UUID userId,
-            List<CheckoutDiscountResponse> discounts
+            BasketSnapshotClientResponse basket,
+            List<CatalogProductSnapshotClientResponse> products,
+            CheckoutQuoteResponse quote,
+            String couponCode
     ) {
         return new PromotionUsageReserveClientRequest(
-                orderId,
+                checkoutId,
                 userId,
-                discounts.stream()
-                        .map(discount -> new PromotionUsageReserveItemClientRequest(
-                                discount.promotionId(),
-                                discount.couponId(),
-                                discount.couponCode(),
-                                discount.discountAmount(),
-                                discount.shippingDiscountAmount(),
-                                discount.description()
-                        ))
-                        .toList()
+                couponCode,
+                quote.discounts()
+                        .stream()
+                        .map(CheckoutDiscountResponse::promotionId)
+                        .filter(id -> id != null)
+                        .distinct()
+                        .toList(),
+                basket.items()
+                        .stream()
+                        .map(item -> {
+                            CatalogProductSnapshotClientResponse product =
+                                    findProduct(products, item.productId());
+
+                            return new PromotionQuoteItemClientRequest(
+                                    requiredUuid(item.productId(), "Product id is invalid"),
+                                    nullableUuid(product.categoryId()),
+                                    nullableUuid(product.brandId()),
+                                    item.unitPrice(),
+                                    item.quantity()
+                            );
+                        })
+                        .toList(),
+                quote.money().shippingFee(),
+                quote.money().currency()
         );
     }
 
@@ -180,20 +196,31 @@ public class CheckoutMapper {
     public PaymentInitializeClientRequest toPaymentInitializeRequest(
             CheckoutSession checkoutSession,
             CheckoutSubmitRequest submitRequest,
-            OrderClientResponse order
+            OrderClientResponse order,
+            UserAddressSnapshotClientResponse shippingAddress,
+            UserAddressSnapshotClientResponse billingAddress,
+            BasketSnapshotClientResponse basket,
+            List<CatalogProductSnapshotClientResponse> products
     ) {
         CheckoutPaymentMethodRequest paymentMethod = submitRequest.paymentMethod();
 
         return new PaymentInitializeClientRequest(
                 checkoutSession.getId(),
                 order.id(),
+                order.orderNumber(),
                 checkoutSession.getUserId(),
                 order.grandTotalAmount(),
                 order.currency(),
                 paymentMethod.provider(),
                 paymentMethod.methodType(),
-                paymentMethod.paymentToken(),
-                paymentMethod.shouldUseThreeDSecure()
+                null,
+                null,
+                null,
+                checkoutSession.getBasketId(),
+                toPaymentBuyer(checkoutSession.getUserId(), shippingAddress),
+                toPaymentAddress(shippingAddress),
+                toPaymentAddress(billingAddress),
+                toPaymentBasketItems(basket, products)
         );
     }
 
@@ -328,7 +355,7 @@ public class CheckoutMapper {
 
                             return new CreateShipmentItemClientRequest(
                                     item.productId(),
-                                    item.sku(),
+                                    product.sku(),
                                     product.name(),
                                     item.quantity()
                             );
@@ -404,7 +431,7 @@ public class CheckoutMapper {
 
                     return new CheckoutItemResponse(
                             item.productId(),
-                            item.sku(),
+                            product.sku(),
                             product.name(),
                             product.slug(),
                             product.mainImageUrl(),
@@ -434,7 +461,7 @@ public class CheckoutMapper {
                 .stream()
                 .map(discount -> new CheckoutDiscountResponse(
                         discount.promotionId(),
-                        null,
+                        discount.promotionName(),
                         discount.couponId(),
                         discount.couponCode(),
                         discount.promotionType(),
@@ -460,7 +487,7 @@ public class CheckoutMapper {
 
                     return new CreateOrderItemClientRequest(
                             item.productId(),
-                            item.sku(),
+                            product.sku(),
                             product.name(),
                             product.slug(),
                             product.mainImageUrl(),
@@ -531,6 +558,94 @@ public class CheckoutMapper {
                 address.addressLine2(),
                 address.postalCode()
         );
+    }
+
+    private PaymentBuyerClientRequest toPaymentBuyer(
+            UUID userId,
+            UserAddressSnapshotClientResponse address
+    ) {
+        String[] nameParts = splitName(address.recipientName());
+
+        return new PaymentBuyerClientRequest(
+                userId.toString(),
+                nameParts[0],
+                nameParts[1],
+                null,
+                address.recipientPhone(),
+                null,
+                singleLineAddress(address),
+                address.city(),
+                address.country(),
+                address.postalCode(),
+                null
+        );
+    }
+
+    private PaymentAddressClientRequest toPaymentAddress(
+            UserAddressSnapshotClientResponse address
+    ) {
+        return new PaymentAddressClientRequest(
+                address.recipientName(),
+                address.city(),
+                address.country(),
+                singleLineAddress(address),
+                address.postalCode()
+        );
+    }
+
+    private List<PaymentBasketItemClientRequest> toPaymentBasketItems(
+            BasketSnapshotClientResponse basket,
+            List<CatalogProductSnapshotClientResponse> products
+    ) {
+        return basket.items()
+                .stream()
+                .map(item -> {
+                    CatalogProductSnapshotClientResponse product =
+                            findProduct(products, item.productId());
+
+                    BigDecimal lineTotal = item.unitPrice()
+                            .multiply(BigDecimal.valueOf(item.quantity()));
+
+                    return new PaymentBasketItemClientRequest(
+                            item.productId(),
+                            product.name(),
+                            product.categoryName(),
+                            "PHYSICAL",
+                            lineTotal
+                    );
+                })
+                .toList();
+    }
+
+    private String[] splitName(String fullName) {
+        if (fullName == null || fullName.isBlank()) {
+            return new String[]{"Customer", "Customer"};
+        }
+
+        String normalized = fullName.trim();
+        int splitAt = normalized.indexOf(' ');
+
+        if (splitAt < 0) {
+            return new String[]{normalized, normalized};
+        }
+
+        return new String[]{
+                normalized.substring(0, splitAt),
+                normalized.substring(splitAt + 1).trim()
+        };
+    }
+
+    private String singleLineAddress(UserAddressSnapshotClientResponse address) {
+        return List.of(
+                        address.addressLine1(),
+                        address.addressLine2(),
+                        address.neighborhood(),
+                        address.district()
+                )
+                .stream()
+                .filter(value -> value != null && !value.isBlank())
+                .reduce((left, right) -> left + ", " + right)
+                .orElse(address.city());
     }
 
     private CatalogProductSnapshotClientResponse findProduct(

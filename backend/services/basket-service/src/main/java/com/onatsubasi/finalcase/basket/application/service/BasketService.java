@@ -54,6 +54,26 @@ public class BasketService {
         return basketMapper.toResponse(basket);
     }
 
+    @Transactional(readOnly = true)
+    public BasketResponse getBasketSnapshot(UUID basketId, UUID userId) {
+        Basket basket = basketRepository.findById(basketId)
+                .orElseThrow(() -> new BaseException(BasketErrorCode.BASKET_NOT_FOUND));
+
+        if (!basket.getUserId().equals(userId)) {
+            throw new BaseException(BasketErrorCode.BASKET_OWNERSHIP_VIOLATION);
+        }
+
+        if (basket.getStatus() != BasketStatus.ACTIVE) {
+            throw new BaseException(BasketErrorCode.BASKET_NOT_ACTIVE);
+        }
+
+        if (basket.isEmpty()) {
+            throw new BaseException(BasketErrorCode.BASKET_EMPTY);
+        }
+
+        return basketMapper.toResponse(basket);
+    }
+
     @Transactional
     public BasketResponse addItem(UserContext userContext, AddBasketItemRequest request) {
         try {

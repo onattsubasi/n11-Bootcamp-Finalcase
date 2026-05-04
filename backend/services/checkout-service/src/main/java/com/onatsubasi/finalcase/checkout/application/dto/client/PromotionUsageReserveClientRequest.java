@@ -1,11 +1,16 @@
 package com.onatsubasi.finalcase.checkout.application.dto.client;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
 public record PromotionUsageReserveClientRequest(
-        UUID orderId,
+        UUID checkoutId,
         UUID userId,
-        List<PromotionUsageReserveItemClientRequest> appliedDiscounts
+        String couponCode,
+        List<UUID> selectedPromotionIds,
+        List<PromotionQuoteItemClientRequest> items,
+        BigDecimal shippingFee,
+        String currency
 ) {
 }

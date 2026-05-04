@@ -1,0 +1,5 @@
+@baseUrl = http://localhost:8080
+@authToken = {{login.response.body.accessToken}}
+@userId = {{login.response.body.userId}}
+@email = customer@example.com
+@password = password123

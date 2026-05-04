@@ -30,8 +30,16 @@ class CheckoutMapperTest {
                 money("150.00"),
                 money("0.00"),
                 money("1850.00"),
-                List.of(new AppliedPromotionDiscountClientResponse(UUID.randomUUID(), null, null, "PERCENTAGE", money("150.00"), money("0.00"), "campaign"))
-        );
+                List.of(new AppliedPromotionDiscountClientResponse(
+                        UUID.randomUUID(),
+                        "Welcome Promotion",
+                        UUID.randomUUID(),
+                        "WELCOME",
+                        "FIXED_AMOUNT_DISCOUNT",
+                        money("50.00"),
+                        BigDecimal.ZERO,
+                        "welcome discount"
+                )));
 
         CheckoutQuoteResponse response = mapper.toQuoteResponse(basket, products, promotion, money("0.00"), money("0.00"));
 
@@ -54,8 +62,16 @@ class CheckoutMapperTest {
         BasketSnapshotClientResponse basket = basket(userId, basketId, productId, "500.00", 1);
         PromotionQuoteClientResponse promotion = new PromotionQuoteClientResponse(
                 money("500.00"), money("50.00"), money("0.00"), money("450.00"),
-                List.of(new AppliedPromotionDiscountClientResponse(UUID.randomUUID(), UUID.randomUUID(), "WELCOME", "FIXED", money("50.00"), money("0.00"), "welcome coupon"))
-        );
+                List.of(new AppliedPromotionDiscountClientResponse(
+                        UUID.randomUUID(),
+                        "Welcome Promotion",
+                        UUID.randomUUID(),
+                        "WELCOME",
+                        "FIXED_AMOUNT_DISCOUNT",
+                        money("50.00"),
+                        BigDecimal.ZERO,
+                        "welcome discount"
+                )));
         CheckoutQuoteResponse quote = mapper.toQuoteResponse(basket, List.of(product(productId, "500.00", true)), promotion, money("0.00"), money("0.00"));
         CheckoutSession session = CheckoutSession.start(userId, "idem", "hash", "TRY", Instant.now().plusSeconds(1800));
         UserAddressSnapshotClientResponse address = address(addressId, userId);
@@ -69,32 +85,40 @@ class CheckoutMapperTest {
         assertThat(session.getDiscounts().getFirst().getDiscountAmount()).isEqualByComparingTo("50.00");
     }
 
-    private static BasketSnapshotClientResponse basket(UUID userId, UUID basketId, String productId, String unitPrice, int quantity) {
+    private static BasketSnapshotClientResponse basket(
+            UUID userId,
+            UUID basketId,
+            String productId,
+            String unitPrice,
+            int quantity
+    ) {
         BigDecimal price = money(unitPrice);
+
         return new BasketSnapshotClientResponse(
                 basketId,
                 userId,
-                List.of(new BasketItemClientResponse(productId, "SKU-1", quantity, price, "TRY")),
-                price.multiply(BigDecimal.valueOf(quantity)),
-                "TRY"
+                List.of(new BasketItemClientResponse(productId, "SKU-1", quantity, price, "TRY"))
         );
     }
 
-    private static CatalogProductSnapshotClientResponse product(String productId, String price, boolean active) {
+    private static CatalogProductSnapshotClientResponse product(String productId, String price, boolean sellable) {
         return new CatalogProductSnapshotClientResponse(
                 productId,
                 "SKU-1",
-                "example-product",
                 "Example Product",
-                "Description",
-                UUID.randomUUID().toString(),
-                "Brand",
-                UUID.randomUUID().toString(),
-                "Category",
-                "https://cdn.example.com/product.jpg",
-                money(price),
-                "TRY",
-                active
+                "example-product",
+                sellable ? "ACTIVE" : "INACTIVE",
+                sellable,
+                new CatalogProductSnapshotClientResponse.MoneySnapshot(money(price), "TRY"),
+                new CatalogProductSnapshotClientResponse.BrandSnapshot(UUID.randomUUID().toString(), "Brand", "brand"),
+                new CatalogProductSnapshotClientResponse.CategorySnapshot(
+                        UUID.randomUUID().toString(),
+                        "Category",
+                        "category",
+                        "/category"
+                ),
+                new CatalogProductSnapshotClientResponse.OwnershipSnapshot("PLATFORM", null, null),
+                "https://cdn.example.com/product.jpg"
         );
     }
 

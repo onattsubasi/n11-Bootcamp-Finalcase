@@ -1,0 +1,28 @@
+### ═══════════════════════════════════════════════════════════════
+### NOTIFICATION SERVICE — Inbox & Read Status
+### ═══════════════════════════════════════════════════════════════
+
+@host = http://localhost:18000
+@access_token = {{access_token}}
+
+### ── 1. Get unread count ────────────────────────────────────────
+GET {{host}}/api/customer/notifications/unread-count
+Authorization: Bearer {{access_token}}
+
+### ── 2. List notifications ──────────────────────────────────────
+GET {{host}}/api/customer/notifications?page=0&size=20
+Authorization: Bearer {{access_token}}
+
+> {%
+  if (response.body.content && response.body.content.length > 0) {
+    client.global.set("notification_id", response.body.content[0].id);
+  }
+%}
+
+### ── 3. Mark notification as read ───────────────────────────────
+PATCH {{host}}/api/customer/notifications/{{notification_id}}/read
+Authorization: Bearer {{access_token}}
+
+### ── 4. Mark all as read ────────────────────────────────────────
+POST {{host}}/api/customer/notifications/read-all
+Authorization: Bearer {{access_token}}

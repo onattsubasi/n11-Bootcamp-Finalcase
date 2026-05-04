@@ -1,0 +1,9 @@
+### 1. Search Products
+GET {{baseUrl}}/api/products/search?q=phone&page=0&size=10
+
+### 2. Get Product by ID
+# @name product
+GET {{baseUrl}}/api/products/{{productId}}
+
+### 3. Get Categories
+GET {{baseUrl}}/api/products/categories

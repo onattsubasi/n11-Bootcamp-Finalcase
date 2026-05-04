@@ -1,0 +1,58 @@
+### ═══════════════════════════════════════════════════════════════
+### CHECKOUT SAGA — Quote & Submit
+### ═══════════════════════════════════════════════════════════════
+
+@host = http://localhost:18000
+@access_token = {{access_token}}
+
+### ── 1. Get addresses ───────────────────────────────────────────
+GET {{host}}/api/customer/addresses
+Authorization: Bearer {{access_token}}
+
+> {%
+  if (response.body.length > 0) {
+    client.global.set("address_id", response.body[0].id);
+  } else {
+    // Hardcoded fallback for tests if no address exists
+    client.global.set("address_id", "550e8400-e29b-41d4-a716-446655440000");
+  }
+%}
+
+### ── 2. Create Checkout Quote ───────────────────────────────────
+POST {{host}}/api/customer/checkout/quote
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "shippingAddressId": "{{address_id}}",
+  "billingAddressId": "{{address_id}}"
+}
+
+> {%
+  client.global.set("checkout_id", response.body.id);
+%}
+
+### ── 3. Submit Checkout ─────────────────────────────────────────
+POST {{host}}/api/customer/checkout
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "shippingAddressId": "{{address_id}}",
+  "billingAddressId": "{{address_id}}",
+  "paymentProvider": "IYZICO",
+  "paymentMethod": "CHECKOUT_FORM",
+  "successRedirectUrl": "http://localhost:5173/checkout/success",
+  "failureRedirectUrl": "http://localhost:5173/checkout/failure"
+}
+
+> {%
+  client.test("checkout submitted", function() {
+    client.assert(response.status === 200 || response.status === 202);
+  });
+  client.global.set("order_id", response.body.orderId);
+%}
+
+### ── 4. Poll Order Status ───────────────────────────────────────
+GET {{host}}/api/customer/orders/{{order_id}}
+Authorization: Bearer {{access_token}}

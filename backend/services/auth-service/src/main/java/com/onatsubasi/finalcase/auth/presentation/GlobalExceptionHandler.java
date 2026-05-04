@@ -9,8 +9,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -66,6 +69,78 @@ public class GlobalExceptionHandler {
             return ResponseEntity
                     .badRequest()
                     .body(ErrorResponse.validation(CommonErrorCode.VALIDATION_FAILED, errors, correlationId));
+        } finally {
+            MDC.remove("errorCode");
+        }
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleMalformedRequest(
+            HttpMessageNotReadableException ex,
+            HttpServletRequest request
+    ) {
+        try {
+            MDC.put("errorCode", CommonErrorCode.MALFORMED_REQUEST.code());
+
+            String correlationId = request.getHeader(PlatformHeaders.X_CORRELATION_ID);
+
+            log.warn("Malformed request body received: message={}", ex.getMessage());
+
+            return ResponseEntity
+                    .badRequest()
+                    .body(ErrorResponse.of(
+                            CommonErrorCode.MALFORMED_REQUEST,
+                            CommonErrorCode.MALFORMED_REQUEST.defaultMessage(),
+                            correlationId
+                    ));
+        } finally {
+            MDC.remove("errorCode");
+        }
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotAllowed(
+            HttpRequestMethodNotSupportedException ex,
+            HttpServletRequest request
+    ) {
+        try {
+            MDC.put("errorCode", CommonErrorCode.METHOD_NOT_ALLOWED.code());
+
+            String correlationId = request.getHeader(PlatformHeaders.X_CORRELATION_ID);
+
+            log.warn("HTTP method not allowed: method={}, path={}", request.getMethod(), request.getRequestURI());
+
+            return ResponseEntity
+                    .status(CommonErrorCode.METHOD_NOT_ALLOWED.httpStatus())
+                    .body(ErrorResponse.of(
+                            CommonErrorCode.METHOD_NOT_ALLOWED,
+                            CommonErrorCode.METHOD_NOT_ALLOWED.defaultMessage(),
+                            correlationId
+                    ));
+        } finally {
+            MDC.remove("errorCode");
+        }
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleUnsupportedMediaType(
+            HttpMediaTypeNotSupportedException ex,
+            HttpServletRequest request
+    ) {
+        try {
+            MDC.put("errorCode", CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.code());
+
+            String correlationId = request.getHeader(PlatformHeaders.X_CORRELATION_ID);
+
+            log.warn("Unsupported media type: contentType={}, path={}", request.getContentType(), request.getRequestURI());
+
+            return ResponseEntity
+                    .status(CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.httpStatus())
+                    .body(ErrorResponse.of(
+                            CommonErrorCode.UNSUPPORTED_MEDIA_TYPE,
+                            CommonErrorCode.UNSUPPORTED_MEDIA_TYPE.defaultMessage(),
+                            correlationId
+                    ));
         } finally {
             MDC.remove("errorCode");
         }

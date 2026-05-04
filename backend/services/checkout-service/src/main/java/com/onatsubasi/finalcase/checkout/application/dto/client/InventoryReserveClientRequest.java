@@ -5,7 +5,6 @@ import java.util.UUID;
 
 public record InventoryReserveClientRequest(
         UUID checkoutId,
-        UUID basketId,
         UUID userId,
         List<InventoryReserveItemClientRequest> items
 ) {

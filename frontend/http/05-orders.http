@@ -1,0 +1,18 @@
+### ═══════════════════════════════════════════════════════════════
+### ORDER SERVICE — History & Details
+### ═══════════════════════════════════════════════════════════════
+
+@host = http://localhost:18000
+@access_token = {{access_token}}
+
+### ── 1. List my orders ──────────────────────────────────────────
+GET {{host}}/api/customer/orders?page=0&size=10
+Authorization: Bearer {{access_token}}
+
+### ── 2. Get order detail ────────────────────────────────────────
+GET {{host}}/api/customer/orders/{{order_id}}
+Authorization: Bearer {{access_token}}
+
+### ── 3. Cancel order ────────────────────────────────────────────
+POST {{host}}/api/customer/orders/{{order_id}}/cancel
+Authorization: Bearer {{access_token}}

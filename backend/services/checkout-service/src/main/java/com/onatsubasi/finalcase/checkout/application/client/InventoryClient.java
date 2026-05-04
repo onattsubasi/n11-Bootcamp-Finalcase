@@ -2,6 +2,8 @@ package com.onatsubasi.finalcase.checkout.application.client;
 
 import com.onatsubasi.finalcase.checkout.application.dto.client.InventoryReservationClientResponse;
 import com.onatsubasi.finalcase.checkout.application.dto.client.InventoryReserveClientRequest;
+import com.onatsubasi.finalcase.checkout.application.dto.client.ConfirmReservationClientRequest;
+import com.onatsubasi.finalcase.checkout.application.dto.client.ReleaseReservationClientRequest;
 import com.onatsubasi.finalcase.checkout.infrastructure.config.FeignConfig;
 import com.onatsubasi.finalcase.common.core.response.ApiResponse;
 import org.springframework.cloud.openfeign.FeignClient;
@@ -27,13 +29,13 @@ public interface InventoryClient {
 
     @PostMapping("/reservations/{reservationId}/confirm")
     ApiResponse<InventoryReservationClientResponse> confirmReservation(
-            @RequestHeader("Idempotency-Key") String idempotencyKey,
-            @PathVariable UUID reservationId
+            @PathVariable UUID reservationId,
+            @RequestBody ConfirmReservationClientRequest request
     );
 
     @PostMapping("/reservations/{reservationId}/release")
     ApiResponse<InventoryReservationClientResponse> releaseReservation(
-            @RequestHeader("Idempotency-Key") String idempotencyKey,
-            @PathVariable UUID reservationId
+            @PathVariable UUID reservationId,
+            @RequestBody ReleaseReservationClientRequest request
     );
 }

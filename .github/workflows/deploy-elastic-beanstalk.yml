@@ -1,33 +1,50 @@
-name: Deploy to AWS Elastic Beanstalk
+name: Deploy Backend to AWS Elastic Beanstalk
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths:
+      - "backend/**"
+      - "deploy/aws/elasticbeanstalk/**"
+      - ".github/workflows/deploy-elastic-beanstalk.yml"
 
 concurrency:
   group: deploy-eb-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_REPOSITORY_PREFIX: ${{ secrets.ECR_REPOSITORY_PREFIX }}
-  EB_APPLICATION_NAME: ${{ secrets.EB_APPLICATION_NAME }}
-  EB_ENVIRONMENT_NAME: ${{ secrets.EB_ENVIRONMENT_NAME }}
-  EB_DEPLOY_BUCKET: ${{ secrets.EB_DEPLOY_BUCKET }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  EB_APPLICATION_NAME: ${{ vars.EB_APPLICATION_NAME }}
+  EB_ENVIRONMENT_NAME: ${{ vars.EB_ENVIRONMENT_NAME }}
+  EB_DEPLOY_BUCKET: ${{ vars.EB_DEPLOY_BUCKET }}
+  ECR_REPOSITORY_PREFIX: ${{ vars.ECR_REPOSITORY_PREFIX }}
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
   deploy:
+    name: Build images and deploy backend
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - name: Validate required variables
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${AWS_REGION}" || (echo "Missing GitHub variable: AWS_REGION" && exit 1)
+          test -n "${EB_APPLICATION_NAME}" || (echo "Missing GitHub variable: EB_APPLICATION_NAME" && exit 1)
+          test -n "${EB_ENVIRONMENT_NAME}" || (echo "Missing GitHub variable: EB_ENVIRONMENT_NAME" && exit 1)
+          test -n "${EB_DEPLOY_BUCKET}" || (echo "Missing GitHub variable: EB_DEPLOY_BUCKET" && exit 1)
+          test -n "${ECR_REPOSITORY_PREFIX}" || (echo "Missing GitHub variable: ECR_REPOSITORY_PREFIX" && exit 1)
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
@@ -44,55 +61,157 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Compile backend
+      - name: Ensure Elastic Beanstalk deployment bucket exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          if aws s3api head-bucket --bucket "${EB_DEPLOY_BUCKET}" 2>/dev/null; then
+            echo "Bucket exists: ${EB_DEPLOY_BUCKET}"
+          else
+            echo "Creating bucket: ${EB_DEPLOY_BUCKET}"
+            aws s3api create-bucket \
+              --bucket "${EB_DEPLOY_BUCKET}" \
+              --region "${AWS_REGION}" \
+              --create-bucket-configuration LocationConstraint="${AWS_REGION}"
+          fi
+
+      - name: Verify backend
         working-directory: backend
+        shell: bash
         run: mvn -B -ntp clean verify
 
       - name: Build and push service images with Jib
         working-directory: backend
+        shell: bash
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           set -euo pipefail
-          services="discovery-service api-gateway auth-service user-service catalog-service search-service basket-service inventory-service promotion-service checkout-service order-service payment-service shipment-service notification-service review-service"
-          for service in $services; do
-            repo="${ECR_REPOSITORY_PREFIX}-${service}"
-            aws ecr describe-repositories --repository-names "$repo" >/dev/null 2>&1 ||               aws ecr create-repository --repository-name "$repo" >/dev/null
 
-            module="services/$service"
-            image="$ECR_REGISTRY/$repo:$IMAGE_TAG"
-            echo "Building $module -> $image"
-            mvn -B -ntp -pl "$module" -am compile com.google.cloud.tools:jib-maven-plugin:3.4.5:build -Dimage="$image"
+          services=(
+            discovery-service
+            api-gateway
+            auth-service
+            user-service
+            catalog-service
+            search-service
+            basket-service
+            inventory-service
+            promotion-service
+            order-service
+            payment-service
+            shipment-service
+            checkout-service
+            notification-service
+            review-service
+          )
+
+          for service in "${services[@]}"; do
+            repo="${ECR_REPOSITORY_PREFIX}-${service}"
+            image="${ECR_REGISTRY}/${repo}:${IMAGE_TAG}"
+
+            echo "Ensuring ECR repository exists: ${repo}"
+            aws ecr describe-repositories --repository-names "${repo}" >/dev/null 2>&1 || \
+              aws ecr create-repository --repository-name "${repo}" >/dev/null
+
+            echo "Building module services/${service} -> ${image}"
+            mvn -B -ntp -pl "services/${service}" -am compile \
+              com.google.cloud.tools:jib-maven-plugin:3.4.5:build \
+              -Dimage="${image}"
           done
 
       - name: Render Elastic Beanstalk docker-compose.yml
+        shell: bash
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           set -euo pipefail
+          rm -rf eb-package
           mkdir -p eb-package
-          sed             -e "s#__ECR_REGISTRY__#$ECR_REGISTRY#g"             -e "s#__ECR_REPOSITORY_PREFIX__#$ECR_REPOSITORY_PREFIX#g"             -e "s#__IMAGE_TAG__#$IMAGE_TAG#g"             deploy/aws/elasticbeanstalk/docker-compose.aws-eb.template.yml > eb-package/docker-compose.yml
+
+          sed \
+            -e "s#__ECR_REGISTRY__#${ECR_REGISTRY}#g" \
+            -e "s#__ECR_REPOSITORY_PREFIX__#${ECR_REPOSITORY_PREFIX}#g" \
+            -e "s#__IMAGE_TAG__#${IMAGE_TAG}#g" \
+            deploy/aws/elasticbeanstalk/docker-compose.aws-eb.template.yml \
+            > eb-package/docker-compose.yml
+
           cd eb-package
-          zip -r ../finalcase-eb-${IMAGE_TAG}.zip docker-compose.yml
+          zip -r "../finalcase-eb-${IMAGE_TAG}.zip" docker-compose.yml
 
       - name: Upload deployment bundle to S3
+        shell: bash
         run: |
+          set -euo pipefail
           aws s3 cp "finalcase-eb-${IMAGE_TAG}.zip" "s3://${EB_DEPLOY_BUCKET}/finalcase-eb-${IMAGE_TAG}.zip"
 
       - name: Create Elastic Beanstalk application version
+        shell: bash
         run: |
-          aws elasticbeanstalk create-application-version             --application-name "$EB_APPLICATION_NAME"             --version-label "$IMAGE_TAG"             --source-bundle S3Bucket="$EB_DEPLOY_BUCKET",S3Key="finalcase-eb-${IMAGE_TAG}.zip"
+          set -euo pipefail
+          aws elasticbeanstalk create-application-version \
+            --application-name "${EB_APPLICATION_NAME}" \
+            --version-label "${IMAGE_TAG}" \
+            --source-bundle S3Bucket="${EB_DEPLOY_BUCKET}",S3Key="finalcase-eb-${IMAGE_TAG}.zip"
 
       - name: Deploy Elastic Beanstalk application version
+        shell: bash
         run: |
-          aws elasticbeanstalk update-environment             --application-name "$EB_APPLICATION_NAME"             --environment-name "$EB_ENVIRONMENT_NAME"             --version-label "$IMAGE_TAG"
+          set -euo pipefail
+          aws elasticbeanstalk update-environment \
+            --application-name "${EB_APPLICATION_NAME}" \
+            --environment-name "${EB_ENVIRONMENT_NAME}" \
+            --version-label "${IMAGE_TAG}"
+
+      - name: Wait for Elastic Beanstalk environment update
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws elasticbeanstalk wait environment-updated \
+            --application-name "${EB_APPLICATION_NAME}" \
+            --environment-names "${EB_ENVIRONMENT_NAME}"
 
       - name: Notify Slack
         if: always()
+        shell: bash
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           JOB_STATUS: ${{ job.status }}
         run: |
+          set -euo pipefail
           if [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
-            curl -X POST -H 'Content-type: application/json'               --data "{"text":"Finalcase Elastic Beanstalk deploy status: $JOB_STATUS | commit: $IMAGE_TAG"}"               "$SLACK_WEBHOOK_URL"
+            python - <<'PY' > slack-payload.json
+          import json
+          import os
+
+          status = os.environ.get("JOB_STATUS", "unknown")
+          image_tag = os.environ.get("IMAGE_TAG", "")
+          repo = os.environ.get("GITHUB_REPOSITORY", "")
+          ref = os.environ.get("GITHUB_REF_NAME", "")
+          run_id = os.environ.get("GITHUB_RUN_ID", "")
+          server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
+          run_url = f"{server}/{repo}/actions/runs/{run_id}" if repo and run_id else ""
+
+          ok = status == "success"
+          emoji = "✅" if ok else "❌"
+          color = "good" if ok else "danger"
+
+          payload = {
+              "text": f"{emoji} Finalcase backend Elastic Beanstalk deploy: {status}",
+              "attachments": [
+                  {
+                      "fallback": f"Finalcase backend deploy {status}",
+                      "color": color,
+                      "fields": [
+                          {"title": "Repository", "value": repo, "short": True},
+                          {"title": "Branch", "value": ref, "short": True},
+                          {"title": "Commit", "value": image_tag, "short": False},
+                          {"title": "Run", "value": f"<{run_url}|Open GitHub Actions run>" if run_url else "-", "short": False},
+                      ],
+                  }
+              ],
+          }
+          print(json.dumps(payload))
+          PY
+            curl -X POST -H 'Content-type: application/json' --data @slack-payload.json "${SLACK_WEBHOOK_URL}"
           fi

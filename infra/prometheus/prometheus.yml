@@ -1,37 +1,32 @@
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
-
-rule_files:
-  - /etc/prometheus/alerts.yml
+  external_labels:
+    project: finalcase
+    environment: local
 
 scrape_configs:
-  - job_name: finalcase-services
+  - job_name: finalcase-spring-services
     metrics_path: /actuator/prometheus
     static_configs:
       - targets:
-          - "api-gateway:8080"
-          - "discovery-service:8761"
-          - "auth-service:8080"
-          - "user-service:8080"
-          - "catalog-service:8080"
-          - "search-service:8080"
-          - "basket-service:8080"
-          - "inventory-service:8080"
-          - "promotion-service:8080"
-          - "checkout-service:8080"
-          - "order-service:8080"
-          - "payment-service:8080"
-          - "shipment-service:8080"
-          - "notification-service:8080"
-          - "review-service:8080"
-        labels:
-          project: finalcase
+          - discovery-service:8761
+          - api-gateway:8080
+          - auth-service:8081
+          - user-service:8082
+          - catalog-service:8083
+          - search-service:8084
+          - basket-service:8085
+          - inventory-service:8086
+          - promotion-service:8087
+          - order-service:8088
+          - payment-service:8089
+          - shipment-service:8090
+          - checkout-service:8091
+          - notification-service:8092
+          - review-service:8093
 
-  - job_name: rabbitmq
-    metrics_path: /metrics
+  - job_name: prometheus
     static_configs:
       - targets:
-          - "rabbitmq:15692"
-        labels:
-          project: finalcase
+          - prometheus:9090

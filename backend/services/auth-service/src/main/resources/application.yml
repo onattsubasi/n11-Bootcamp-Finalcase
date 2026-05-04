@@ -1,12 +1,9 @@
 server:
   port: ${SERVER_PORT:8081}
   forward-headers-strategy: framework
-
 spring:
   application:
     name: auth-service
-
-
   datasource:
     url: ${AUTH_DB_URL:jdbc:postgresql://${DB_HOST:127.0.0.1}:${DB_PORT:5432}/${AUTH_DB_NAME:auth_db}}
     username: ${AUTH_DB_USERNAME:${DB_USERNAME:postgres}}
@@ -18,7 +15,6 @@ spring:
       connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:30000}
       idle-timeout: ${DB_IDLE_TIMEOUT_MS:600000}
       max-lifetime: ${DB_MAX_LIFETIME_MS:1800000}
-
   jpa:
     hibernate:
       ddl-auto: validate
@@ -27,41 +23,25 @@ spring:
     properties:
       hibernate:
         format_sql: false
-
   flyway:
     enabled: true
     baseline-on-migrate: false
     locations: classpath:db/migration
-
-  
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USERNAME:guest}
     password: ${RABBITMQ_PASSWORD:guest}
-
 eureka:
   client:
     service-url:
       defaultZone: ${EUREKA_DEFAULT_ZONE:${EUREKA_URI:http://localhost:8761/eureka/}}
+    register-with-eureka: true
+    fetch-registry: true
   instance:
-    prefer-ip-address: true
-
-jwt:
-  secret: ${JWT_SECRET}
-  issuer: ${JWT_ISSUER:finalcase-auth-service}
-  access-token-expiration-ms: ${JWT_ACCESS_TOKEN_EXPIRATION_MS:900000} # 15 minutes
-
-auth:
-  refresh-token:
-    pepper: ${REFRESH_TOKEN_PEPPER}
-    expiration-seconds: ${REFRESH_TOKEN_EXPIRATION_SECONDS:604800} # 7 days
-
-    cookie-name: ${AUTH_REFRESH_COOKIE_NAME:refresh_token}
-    cookie-path: ${AUTH_REFRESH_COOKIE_PATH:/api/auth}
-    cookie-secure: ${AUTH_REFRESH_COOKIE_SECURE:false}
-    cookie-same-site: ${AUTH_REFRESH_COOKIE_SAME_SITE:Strict}
-
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
+    prefer-ip-address: ${EUREKA_PREFER_IP_ADDRESS:false}
+    instance-id: ${spring.application.name}:${server.port}
 management:
   endpoints:
     web:
@@ -70,12 +50,7 @@ management:
   endpoint:
     health:
       show-details: when_authorized
-  metrics:
-    tags:
-      application: ${spring.application.name}
-
-logging:
-  level:
-    root: INFO
-    com.onatsubasi.finalcase.auth: INFO
-    org.springframework.security: WARN
+auth:
+  refresh-token:
+    pepper: ${AUTH_REFRESH_TOKEN_PEPPER:local-dev-refresh-token-pepper-change-me}
+    expiration-seconds: ${AUTH_REFRESH_TOKEN_EXPIRATION_SECONDS:2592000}

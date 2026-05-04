@@ -37,6 +37,24 @@ public class InternalBasketController {
         );
     }
 
+    @GetMapping("/{basketId}/snapshot")
+    @Operation(
+            summary = "Get basket snapshot by basket id",
+            description = "Internal endpoint used by Checkout Service to read the selected basket snapshot."
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Basket snapshot returned")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Basket does not belong to user")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Basket not found")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Basket is empty or not active")
+    public ResponseEntity<ApiResponse<BasketResponse>> getBasketSnapshot(
+            @Parameter(description = "Basket id") @PathVariable java.util.UUID basketId,
+            @Parameter(description = "User id of the basket owner") @RequestParam java.util.UUID userId
+    ) {
+        return ResponseEntity.ok(
+                ApiResponse.success(basketService.getBasketSnapshot(basketId, userId))
+        );
+    }
+
     @PostMapping("/{basketId}/mark-checked-out")
     @Operation(
             summary = "Mark active basket as checked out",

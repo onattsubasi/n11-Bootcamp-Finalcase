@@ -45,7 +45,7 @@ public class PublicProductSearchController {
                     attr_color=Black&attr_storage=256GB
                     """
     )
-    @GetMapping({"/api/products/search", "/api/search"})
+    @GetMapping({"/api/products/search", "/api/search", "/api/products"})
     public ResponseEntity<ApiResponse<SearchPageResponse<ProductSearchResultResponse>>> search(
             @RequestParam(required = false, name = "q") String query,
             @RequestParam(required = false) UUID categoryId,

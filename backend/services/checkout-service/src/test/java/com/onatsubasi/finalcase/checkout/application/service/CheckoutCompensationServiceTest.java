@@ -70,8 +70,14 @@ class CheckoutCompensationServiceTest {
         UUID basketId = UUID.randomUUID();
         UUID paymentId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
+
         CheckoutSession session = CheckoutTestFixtures.paymentPendingSession(userId, basketId, paymentId, orderId);
-        PaymentResultEventMessage event = CheckoutTestFixtures.paymentFailedEvent(paymentId, UUID.randomUUID(), orderId, userId);
+        PaymentResultEventMessage event = CheckoutTestFixtures.paymentFailedEvent(
+                paymentId,
+                UUID.randomUUID(),
+                orderId,
+                userId
+        );
 
         when(processedPaymentEventRepository.existsByEventId(eventId)).thenReturn(false);
         when(checkoutSessionRepository.findByPaymentIdForUpdate(paymentId)).thenReturn(Optional.of(session));
@@ -81,7 +87,10 @@ class CheckoutCompensationServiceTest {
         compensationService.compensatePaymentFailure(eventId, "payment.failed", event);
 
         verify(downstreamGateway).releaseReservation(session.getInventoryReservationId());
-        verify(downstreamGateway).cancelPromotionUsage(orderId);
+        verify(downstreamGateway).cancelPromotionUsage(
+                session.getPromotionUsageReservationId(),
+                "PAYMENT_FAILED"
+        );
         verify(downstreamGateway).markOrderPaymentFailed(any(), any());
         verify(eventPublisher).publishCheckoutCompensated(session);
 

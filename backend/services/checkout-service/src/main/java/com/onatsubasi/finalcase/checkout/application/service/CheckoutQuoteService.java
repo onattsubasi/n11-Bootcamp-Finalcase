@@ -95,9 +95,10 @@ public class CheckoutQuoteService {
 
         public List<CatalogProductSnapshotClientResponse> loadProductSnapshots(
                         BasketSnapshotClientResponse basket) {
-                List<String> productIds = basket.items()
+                List<UUID> productIds = basket.items()
                                 .stream()
                                 .map(BasketItemClientResponse::productId)
+                                .map(UUID::fromString)
                                 .distinct()
                                 .toList();
 

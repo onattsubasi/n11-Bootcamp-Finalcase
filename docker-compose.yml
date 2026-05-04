@@ -1,370 +1,385 @@
 name: finalcase
 
-x-common-service-env: &common-service-env
-  SPRING_PROFILES_ACTIVE: docker
-  SERVER_PORT: 8080
-  EUREKA_URI: http://discovery-service:8761/eureka/
-  SPRING_RABBITMQ_HOST: rabbitmq
-  SPRING_RABBITMQ_PORT: 5672
-  SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-finalcase}
-  SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS:-finalcase}
-  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus
-  MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: when_authorized
-  MANAGEMENT_TRACING_SAMPLING_PROBABILITY: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:-1.0}
-  MANAGEMENT_OTLP_TRACING_ENDPOINT: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:-http://otel-collector:4318/v1/traces}
+x-java-common: &java-common
+  restart: unless-stopped
+  networks:
+    - finalcase-net
+  environment:
+    SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+    EUREKA_DEFAULT_ZONE: ${EUREKA_DEFAULT_ZONE:-http://discovery-service:8761/eureka}
+    EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: ${EUREKA_DEFAULT_ZONE:-http://discovery-service:8761/eureka}
+    SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+    SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+    SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-finalcase}
+    SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-change-me}
+    JWT_SECRET: ${JWT_SECRET:-change-me-generate-a-strong-secret}
+    MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
+    MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: ${MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS:-always}
+    OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+    JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70 -XX:+UseContainerSupport"
+  depends_on:
+    postgres:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+    discovery-service:
+      condition: service_healthy
+
+x-spring-healthcheck: &spring-healthcheck
+  interval: 20s
+  timeout: 5s
+  retries: 10
+  start_period: 60s
 
 services:
   postgres:
     image: postgres:16-alpine
+    container_name: finalcase-postgres
     restart: unless-stopped
+    networks:
+      - finalcase-net
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-finalcase}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
-      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-finalcasedb}
+      POSTGRES_USER: ${POSTGRES_USER:-finalcase_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+      - finalcase-postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finalcase_app} -d ${POSTGRES_DB:-finalcasedb}"]
       interval: 10s
       timeout: 5s
       retries: 10
-    networks:
-      - finalcase-net
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
+    container_name: finalcase-rabbitmq
     restart: unless-stopped
+    networks:
+      - finalcase-net
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-finalcase}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-finalcase}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-finalcase}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-change-me}
     ports:
       - "${RABBITMQ_PORT:-5672}:5672"
       - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-      - ./infra/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
-      - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
-      - ./infra/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - finalcase-rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       retries: 10
-    networks:
-      - finalcase-net
 
   discovery-service:
-    image: finalcase/discovery-service:local
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-discovery-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-discovery-service
     restart: unless-stopped
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      SERVER_PORT: 8761
-      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "false"
-      EUREKA_CLIENT_FETCH_REGISTRY: "false"
-    ports:
-      - "${EUREKA_PORT:-18761}:8761"
     networks:
       - finalcase-net
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: ${MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS:-always}
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70 -XX:+UseContainerSupport"
+    ports:
+      - "${EUREKA_PORT:-8761}:8761"
+    healthcheck:
+      <<: *spring-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health | grep -q UP || exit 1"]
 
   api-gateway:
-    image: finalcase/api-gateway:local
-    restart: unless-stopped
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-api-gateway:${IMAGE_TAG:-latest}
+    container_name: finalcase-api-gateway
     environment:
-      SPRING_PROFILES_ACTIVE: docker
-      SERVER_PORT: 8080
-      EUREKA_URI: http://discovery-service:8761/eureka/
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_ISSUER: ${JWT_ISSUER:-finalcase-auth-service}
-      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus
-      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:-1.0}
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:-http://otel-collector:4318/v1/traces}
-    depends_on:
-      discovery-service:
-        condition: service_started
+      <<: *java-common.environment
+      FRONTEND_PUBLIC_URL: ${FRONTEND_PUBLIC_URL:-http://localhost:5173}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-http://localhost:8080}
     ports:
-      - "${API_GATEWAY_PORT:-18080}:8080"
-    networks:
-      - finalcase-net
-
+      - "${GATEWAY_PORT:-8080}:8080"
+    healthcheck:
+      <<: *spring-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
 
   auth-service:
-    image: finalcase/auth-service:local
-    restart: unless-stopped
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-auth-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-auth-service
     environment:
-      <<: *common-service-env
-      SPRING_APPLICATION_NAME: auth-service
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/auth_db
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_ISSUER: ${JWT_ISSUER:-finalcase-auth-service}
-      JWT_ACCESS_TOKEN_EXPIRATION_MS: ${JWT_ACCESS_TOKEN_EXPIRATION_MS:-900000}
-      REFRESH_TOKEN_PEPPER: ${REFRESH_TOKEN_PEPPER}
-      REFRESH_TOKEN_EXPIRATION_SECONDS: ${REFRESH_TOKEN_EXPIRATION_SECONDS:-604800}
-      AUTH_REFRESH_COOKIE_SECURE: ${AUTH_REFRESH_COOKIE_SECURE:-false}
-      AUTH_REFRESH_COOKIE_SAME_SITE: ${AUTH_REFRESH_COOKIE_SAME_SITE:-Strict}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-service:
-        condition: service_started
-    networks:
-      - finalcase-net
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${AUTH_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      JWT_ACCESS_TOKEN_TTL_MINUTES: ${JWT_ACCESS_TOKEN_TTL_MINUTES:-15}
+      JWT_REFRESH_TOKEN_TTL_DAYS: ${JWT_REFRESH_TOKEN_TTL_DAYS:-14}
+    healthcheck:
+      <<: *spring-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q UP || exit 1"]
 
   user-service:
-    image: finalcase/user-service:local
-    restart: unless-stopped
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-user-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-user-service
     environment:
-      <<: *common-service-env
-      SPRING_APPLICATION_NAME: user-service
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/user_db
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-service:
-        condition: service_started
-    networks:
-      - finalcase-net
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${USER_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    healthcheck:
+      <<: *spring-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health | grep -q UP || exit 1"]
 
   catalog-service:
-    image: finalcase/catalog-service:local
-    restart: unless-stopped
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-catalog-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-catalog-service
     environment:
-      <<: *common-service-env
-      SPRING_APPLICATION_NAME: catalog-service
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/catalog_db
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-service:
-        condition: service_started
-    networks:
-      - finalcase-net
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${CATALOG_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    healthcheck:
+      <<: *spring-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/actuator/health | grep -q UP || exit 1"]
 
   search-service:
-    image: finalcase/search-service:local
-    restart: unless-stopped
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-search-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-search-service
     environment:
-      <<: *common-service-env
-      SPRING_APPLICATION_NAME: search-service
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/search_db
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-service:
-        condition: service_started
-    networks:
-      - finalcase-net
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${SEARCH_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    healthcheck:
+      <<: *spring-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/actuator/health | grep -q UP || exit 1"]
 
   basket-service:
-    image: finalcase/basket-service:local
-    restart: unless-stopped
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-basket-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-basket-service
     environment:
-      <<: *common-service-env
-      SPRING_APPLICATION_NAME: basket-service
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/basket_db
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-service:
-        condition: service_started
-    networks:
-      - finalcase-net
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${BASKET_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    healthcheck:
+      <<: *spring-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/actuator/health | grep -q UP || exit 1"]
 
   inventory-service:
-    image: finalcase/inventory-service:local
-    restart: unless-stopped
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-inventory-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-inventory-service
     environment:
-      <<: *common-service-env
-      SPRING_APPLICATION_NAME: inventory-service
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/inventory_db
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-service:
-        condition: service_started
-    networks:
-      - finalcase-net
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${INVENTORY_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    healthcheck:
+      <<: *spring-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8086/actuator/health | grep -q UP || exit 1"]
 
   promotion-service:
-    image: finalcase/promotion-service:local
-    restart: unless-stopped
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-promotion-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-promotion-service
     environment:
-      <<: *common-service-env
-      SPRING_APPLICATION_NAME: promotion-service
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/promotion_db
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-service:
-        condition: service_started
-    networks:
-      - finalcase-net
-
-  checkout-service:
-    image: finalcase/checkout-service:local
-    restart: unless-stopped
-    environment:
-      <<: *common-service-env
-      SPRING_APPLICATION_NAME: checkout-service
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/checkout_db
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-service:
-        condition: service_started
-    networks:
-      - finalcase-net
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${PROMOTION_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    healthcheck:
+      <<: *spring-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8087/actuator/health | grep -q UP || exit 1"]
 
   order-service:
-    image: finalcase/order-service:local
-    restart: unless-stopped
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-order-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-order-service
     environment:
-      <<: *common-service-env
-      SPRING_APPLICATION_NAME: order-service
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/order_db
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-service:
-        condition: service_started
-    networks:
-      - finalcase-net
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${ORDER_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    healthcheck:
+      <<: *spring-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8088/actuator/health | grep -q UP || exit 1"]
 
   payment-service:
-    image: finalcase/payment-service:local
-    restart: unless-stopped
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-payment-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-payment-service
     environment:
-      <<: *common-service-env
-      SPRING_APPLICATION_NAME: payment-service
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/payment_db
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
-      IYZICO_API_KEY: ${IYZICO_API_KEY}
-      IYZICO_SECRET_KEY: ${IYZICO_SECRET_KEY}
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${PAYMENT_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      IYZICO_API_KEY: ${IYZICO_API_KEY:-change-me}
+      IYZICO_SECRET_KEY: ${IYZICO_SECRET_KEY:-change-me}
       IYZICO_BASE_URL: ${IYZICO_BASE_URL:-https://sandbox-api.iyzipay.com}
-      PAYMENT_PUBLIC_BASE_URL: ${PAYMENT_PUBLIC_BASE_URL:-http://localhost:18080}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-service:
-        condition: service_started
-    networks:
-      - finalcase-net
+      PAYMENT_PUBLIC_BASE_URL: ${PAYMENT_PUBLIC_BASE_URL:-http://localhost:8080}
+      PAYMENT_SUCCESS_REDIRECT_URL: ${PAYMENT_SUCCESS_REDIRECT_URL:-http://localhost:5173/payment/success}
+      PAYMENT_FAILURE_REDIRECT_URL: ${PAYMENT_FAILURE_REDIRECT_URL:-http://localhost:5173/payment/failure}
+    healthcheck:
+      <<: *spring-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8089/actuator/health | grep -q UP || exit 1"]
 
   shipment-service:
-    image: finalcase/shipment-service:local
-    restart: unless-stopped
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-shipment-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-shipment-service
     environment:
-      <<: *common-service-env
-      SPRING_APPLICATION_NAME: shipment-service
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/shipment_db
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-service:
-        condition: service_started
-    networks:
-      - finalcase-net
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${SHIPMENT_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    healthcheck:
+      <<: *spring-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8090/actuator/health | grep -q UP || exit 1"]
+
+  checkout-service:
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-checkout-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-checkout-service
+    environment:
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${CHECKOUT_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    healthcheck:
+      <<: *spring-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8091/actuator/health | grep -q UP || exit 1"]
 
   notification-service:
-    image: finalcase/notification-service:local
-    restart: unless-stopped
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-notification-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-notification-service
     environment:
-      <<: *common-service-env
-      SPRING_APPLICATION_NAME: notification-service
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/notification_db
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-service:
-        condition: service_started
-    networks:
-      - finalcase-net
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${NOTIFICATION_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    healthcheck:
+      <<: *spring-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8092/actuator/health | grep -q UP || exit 1"]
 
   review-service:
-    image: finalcase/review-service:local
-    restart: unless-stopped
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-review-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-review-service
     environment:
-      <<: *common-service-env
-      SPRING_APPLICATION_NAME: review-service
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/review_db
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-finalcase}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-service:
-        condition: service_started
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${REVIEW_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    healthcheck:
+      <<: *spring-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8093/actuator/health | grep -q UP || exit 1"]
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: finalcase-prometheus
+    restart: unless-stopped
     networks:
       - finalcase-net
-
-  frontend:
-    image: finalcase/frontend:local
-    restart: unless-stopped
-    profiles: ["frontend"]
-    environment:
-      VITE_API_BASE_URL: http://localhost:${API_GATEWAY_PORT:-18080}
     ports:
-      - "${FRONTEND_PORT:-13000}:80"
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - finalcase-prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
     depends_on:
-      - api-gateway
+      api-gateway:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: finalcase-grafana
+    restart: unless-stopped
     networks:
       - finalcase-net
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - finalcase-grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+      - jaeger
 
-volumes:
-  postgres_data:
-  rabbitmq_data:
+  loki:
+    image: grafana/loki:2.9.8
+    container_name: finalcase-loki
+    restart: unless-stopped
+    networks:
+      - finalcase-net
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./infra/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - finalcase-loki-data:/loki
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+
+  promtail:
+    image: grafana/promtail:2.9.8
+    container_name: finalcase-promtail
+    restart: unless-stopped
+    networks:
+      - finalcase-net
+    volumes:
+      - ./infra/promtail/promtail-config.yaml:/etc/promtail/config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: ["-config.file=/etc/promtail/config.yaml"]
+    depends_on:
+      - loki
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.60
+    container_name: finalcase-jaeger
+    restart: unless-stopped
+    networks:
+      - finalcase-net
+    ports:
+      - "${JAEGER_UI_PORT:-16686}:16686"
+      - "${JAEGER_OTLP_GRPC_PORT:-4317}:4317"
+      - "${JAEGER_OTLP_HTTP_PORT:-4318}:4318"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.109.0
+    container_name: finalcase-otel-collector
+    restart: unless-stopped
+    networks:
+      - finalcase-net
+    volumes:
+      - ./infra/otel-collector/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    depends_on:
+      - jaeger
 
 networks:
   finalcase-net:
-    driver: bridge
+    name: finalcase-net
+
+volumes:
+  finalcase-postgres-data:
+  finalcase-rabbitmq-data:
+  finalcase-prometheus-data:
+  finalcase-grafana-data:
+  finalcase-loki-data:

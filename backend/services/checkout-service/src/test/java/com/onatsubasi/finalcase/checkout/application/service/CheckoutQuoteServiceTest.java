@@ -63,7 +63,9 @@ class CheckoutQuoteServiceTest {
         ArgumentCaptor<PromotionQuoteClientRequest> promotionCaptor = ArgumentCaptor.forClass(PromotionQuoteClientRequest.class);
         verify(downstreamGateway).quotePromotion(promotionCaptor.capture());
         assertThat(promotionCaptor.getValue().items()).hasSize(1);
-        assertThat(promotionCaptor.getValue().subtotal()).isEqualByComparingTo("1000.00");
+        assertThat(promotionCaptor.getValue().userId()).isEqualTo(userId);
+        assertThat(promotionCaptor.getValue().items()).hasSize(1);
+        assertThat(promotionCaptor.getValue().currency()).isEqualTo("TRY");
     }
 
     @Test

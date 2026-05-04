@@ -1,14 +1,232 @@
-# Lightweight local demo override.
-# Usage:
-# docker compose --env-file .env -f docker-compose.yml -f docker-compose.lite.yml up -d
-# This file disables selected secondary services by putting them behind a profile.
+name: finalcase-lite
+
+# Lightweight local/prod-like stack without Grafana, Loki, Prometheus, Jaeger, or OTel.
+# Useful for low-memory servers or first deployment validation.
+
+x-java-common: &java-common
+  restart: unless-stopped
+  networks:
+    - finalcase-net
+  environment:
+    SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+    EUREKA_DEFAULT_ZONE: ${EUREKA_DEFAULT_ZONE:-http://discovery-service:8761/eureka}
+    EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: ${EUREKA_DEFAULT_ZONE:-http://discovery-service:8761/eureka}
+    SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+    SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+    SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-finalcase}
+    SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-change-me}
+    JWT_SECRET: ${JWT_SECRET:-change-me-generate-a-strong-secret}
+    MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:-health,info,prometheus}
+    MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: ${MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS:-always}
+    JAVA_TOOL_OPTIONS: "-Xms128m -Xmx384m -XX:+UseContainerSupport"
+  depends_on:
+    postgres:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+    discovery-service:
+      condition: service_healthy
+
+x-spring-healthcheck: &spring-healthcheck
+  interval: 20s
+  timeout: 5s
+  retries: 10
+  start_period: 60s
 
 services:
-  review-service:
-    profiles: ["full"]
-  notification-service:
-    profiles: ["full"]
-  shipment-service:
-    profiles: ["full"]
+  postgres:
+    image: postgres:16-alpine
+    container_name: finalcase-postgres
+    restart: unless-stopped
+    networks:
+      - finalcase-net
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-finalcasedb}
+      POSTGRES_USER: ${POSTGRES_USER:-finalcase_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - finalcase-postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finalcase_app} -d ${POSTGRES_DB:-finalcasedb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: finalcase-rabbitmq
+    restart: unless-stopped
+    networks:
+      - finalcase-net
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-finalcase}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-change-me}
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - finalcase-rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  discovery-service:
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-discovery-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-discovery-service
+    restart: unless-stopped
+    networks:
+      - finalcase-net
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx256m -XX:+UseContainerSupport"
+    ports:
+      - "${EUREKA_PORT:-8761}:8761"
+    healthcheck:
+      <<: *spring-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health | grep -q UP || exit 1"]
+
+  api-gateway:
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-api-gateway:${IMAGE_TAG:-latest}
+    container_name: finalcase-api-gateway
+    environment:
+      <<: *java-common.environment
+      FRONTEND_PUBLIC_URL: ${FRONTEND_PUBLIC_URL:-http://localhost:5173}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-http://localhost:8080}
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    healthcheck:
+      <<: *spring-healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
+
+  auth-service:
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-auth-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-auth-service
+    environment:
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${AUTH_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      JWT_ACCESS_TOKEN_TTL_MINUTES: ${JWT_ACCESS_TOKEN_TTL_MINUTES:-15}
+      JWT_REFRESH_TOKEN_TTL_DAYS: ${JWT_REFRESH_TOKEN_TTL_DAYS:-14}
+
+  user-service:
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-user-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-user-service
+    environment:
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${USER_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+
+  catalog-service:
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-catalog-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-catalog-service
+    environment:
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${CATALOG_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+
   search-service:
-    profiles: ["full"]
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-search-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-search-service
+    environment:
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${SEARCH_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+
+  basket-service:
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-basket-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-basket-service
+    environment:
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${BASKET_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+
+  inventory-service:
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-inventory-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-inventory-service
+    environment:
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${INVENTORY_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+
+  promotion-service:
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-promotion-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-promotion-service
+    environment:
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${PROMOTION_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+
+  order-service:
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-order-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-order-service
+    environment:
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${ORDER_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+
+  payment-service:
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-payment-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-payment-service
+    environment:
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${PAYMENT_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      IYZICO_API_KEY: ${IYZICO_API_KEY:-change-me}
+      IYZICO_SECRET_KEY: ${IYZICO_SECRET_KEY:-change-me}
+      IYZICO_BASE_URL: ${IYZICO_BASE_URL:-https://sandbox-api.iyzipay.com}
+      PAYMENT_PUBLIC_BASE_URL: ${PAYMENT_PUBLIC_BASE_URL:-http://localhost:8080}
+      PAYMENT_SUCCESS_REDIRECT_URL: ${PAYMENT_SUCCESS_REDIRECT_URL:-http://localhost:5173/payment/success}
+      PAYMENT_FAILURE_REDIRECT_URL: ${PAYMENT_FAILURE_REDIRECT_URL:-http://localhost:5173/payment/failure}
+
+  shipment-service:
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-shipment-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-shipment-service
+    environment:
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${SHIPMENT_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+
+  checkout-service:
+    <<: *java-common
+    image: ${BACKEND_IMAGE_REGISTRY:-ghcr.io}/${BACKEND_IMAGE_OWNER:-your-github-owner-lowercase}/${BACKEND_IMAGE_PREFIX:-finalcase}-checkout-service:${IMAGE_TAG:-latest}
+    container_name: finalcase-checkout-service
+    environment:
+      <<: *java-common.environment
+      SPRING_DATASOURCE_URL: ${CHECKOUT_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-finalcase_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+
+networks:
+  finalcase-net:
+    name: finalcase-net
+
+volumes:
+  finalcase-postgres-data:
+  finalcase-rabbitmq-data:

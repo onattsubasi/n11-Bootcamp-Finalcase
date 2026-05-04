@@ -1,13 +1,7 @@
 package com.onatsubasi.finalcase.order.presentation.controller;
 
 import com.onatsubasi.finalcase.common.core.response.ApiResponse;
-import com.onatsubasi.finalcase.order.application.dto.internal.CreateOrderInternalRequest;
-import com.onatsubasi.finalcase.order.application.dto.internal.MarkOrderDeliveredRequest;
-import com.onatsubasi.finalcase.order.application.dto.internal.MarkOrderPaidRequest;
-import com.onatsubasi.finalcase.order.application.dto.internal.MarkOrderPaymentFailedRequest;
-import com.onatsubasi.finalcase.order.application.dto.internal.MarkOrderShippedRequest;
-import com.onatsubasi.finalcase.order.application.dto.internal.OrderReviewEligibilityResponse;
-import com.onatsubasi.finalcase.order.application.dto.internal.ShipmentCreatedRequest;
+import com.onatsubasi.finalcase.order.application.dto.internal.*;
 import com.onatsubasi.finalcase.order.application.dto.request.CancelOrderRequest;
 import com.onatsubasi.finalcase.order.application.dto.response.OrderDetailResponse;
 import com.onatsubasi.finalcase.order.application.service.OrderCommandService;
@@ -70,6 +64,26 @@ public class InternalOrderController {
         return ResponseEntity.ok(
                 ApiResponse.success(
                         orderQueryService.getByIdForInternal(orderId)
+                )
+        );
+    }
+    @Operation(
+            summary = "Verify delivered purchase",
+            description = "Checks whether the given user has a delivered order containing the requested product. Used by Review Service.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Purchase verification returned")
+    @GetMapping("/verify-purchase")
+    public ResponseEntity<ApiResponse<VerifyPurchaseInternalResponse>> verifyPurchase(
+            @Parameter(description = "User id", required = true)
+            @RequestParam UUID userId,
+
+            @Parameter(description = "Product id", required = true)
+            @RequestParam UUID productId
+    ) {
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        orderQueryService.verifyDeliveredPurchase(userId, productId)
                 )
         );
     }

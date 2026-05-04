@@ -1,11 +1,13 @@
 package com.onatsubasi.finalcase.checkout.application.client;
 
+import com.onatsubasi.finalcase.checkout.application.dto.client.AddressSnapshotClientRequest;
+import com.onatsubasi.finalcase.checkout.application.dto.client.AddressSnapshotsClientResponse;
 import com.onatsubasi.finalcase.checkout.application.dto.client.UserAddressSnapshotClientResponse;
 import com.onatsubasi.finalcase.checkout.infrastructure.config.FeignConfig;
 import com.onatsubasi.finalcase.common.core.response.ApiResponse;
 import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.UUID;
 
@@ -16,9 +18,8 @@ import java.util.UUID;
 )
 public interface UserClient {
 
-    @GetMapping("/{userId}/addresses/{addressId}/snapshot")
-    ApiResponse<UserAddressSnapshotClientResponse> getAddressSnapshot(
-            @PathVariable UUID userId,
-            @PathVariable UUID addressId
+    @PostMapping("/address-snapshots")
+    ApiResponse<AddressSnapshotsClientResponse> getAddressSnapshots(
+            @RequestBody AddressSnapshotClientRequest request
     );
 }

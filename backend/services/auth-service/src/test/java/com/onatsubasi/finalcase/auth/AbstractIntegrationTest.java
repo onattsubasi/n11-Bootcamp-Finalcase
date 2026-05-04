@@ -25,8 +25,13 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
+
         registry.add("jwt.secret", () -> TEST_JWT_SECRET);
+        registry.add("jwt.access-token-expiration-ms", () -> "900000");
+        registry.add("jwt.issuer", () -> "finalcase-auth-service-test");
         registry.add("auth.refresh-token.pepper", () -> "integration-test-refresh-token-pepper");
+        registry.add("auth.refresh-token.expiration-seconds", () -> "604800");
+
         registry.add("eureka.client.enabled", () -> "false");
         registry.add("spring.cloud.discovery.enabled", () -> "false");
     }

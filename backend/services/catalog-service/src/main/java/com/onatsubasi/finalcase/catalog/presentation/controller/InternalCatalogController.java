@@ -47,7 +47,7 @@ public class InternalCatalogController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class))
     )
 
-    @PostMapping({"/products/snapshots", "/products/snapshot"})
+    @PostMapping({"/products/snapshots", "/products/snapshot", "/search-snapshots"})
     public ResponseEntity<ApiResponse<List<ProductSnapshotResponse>>> getProductSnapshots(
             @Valid @RequestBody ProductSnapshotRequest request
     ) {

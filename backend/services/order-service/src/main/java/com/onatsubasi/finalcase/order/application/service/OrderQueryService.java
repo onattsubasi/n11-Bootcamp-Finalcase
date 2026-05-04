@@ -2,6 +2,7 @@ package com.onatsubasi.finalcase.order.application.service;
 
 import com.onatsubasi.finalcase.common.core.exception.BaseException;
 import com.onatsubasi.finalcase.order.application.dto.internal.OrderReviewEligibilityResponse;
+import com.onatsubasi.finalcase.order.application.dto.internal.VerifyPurchaseInternalResponse;
 import com.onatsubasi.finalcase.order.application.dto.response.OrderDetailResponse;
 import com.onatsubasi.finalcase.order.application.dto.response.OrderSummaryResponse;
 import com.onatsubasi.finalcase.order.domain.enums.OrderStatus;
@@ -120,4 +121,52 @@ public class OrderQueryService {
                 Sort.by(Sort.Direction.DESC, "createdAt")
         );
     }
+    @Transactional(readOnly = true)
+    public VerifyPurchaseInternalResponse verifyDeliveredPurchase(UUID userId, UUID productId) {
+        if (userId == null || productId == null) {
+            return VerifyPurchaseInternalResponse.notVerified();
+        }
+
+        String requestedProductId = productId.toString();
+
+        Page<OrderSummaryResponse> ignored = null;
+
+        var orders = orderRepository.findByUserId(
+                userId,
+                PageRequest.of(
+                        0,
+                        100,
+                        Sort.by(Sort.Direction.DESC, "createdAt")
+                )
+        ).getContent();
+
+        for (Order order : orders) {
+            if (order.getStatus() != OrderStatus.DELIVERED) {
+                continue;
+            }
+
+            if (order.getItems() == null) {
+                continue;
+            }
+
+            for (OrderItem item : order.getItems()) {
+                if (item == null || item.getProductId() == null) {
+                    continue;
+                }
+
+                if (requestedProductId.equals(String.valueOf(item.getProductId()))) {
+                    return VerifyPurchaseInternalResponse.verified(
+                            order.getId(),
+                            item.getId(),
+                            order.getOrderNumber(),
+                            null
+                    );
+                }
+            }
+        }
+
+        return VerifyPurchaseInternalResponse.notVerified();
+    }
+
+
 }

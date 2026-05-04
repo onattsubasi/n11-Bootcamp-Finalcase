@@ -60,7 +60,7 @@ class CheckoutFinalizationServiceTest {
         );
 
         verify(checkoutSessionRepository, never()).findByPaymentIdForUpdate(any());
-        verify(downstreamGateway, never()).confirmReservation(any());
+        verify(downstreamGateway, never()).confirmReservation(any(), any());
     }
 
     @Test
@@ -82,8 +82,8 @@ class CheckoutFinalizationServiceTest {
 
         finalizationService.finalizePaymentSuccess(eventId, "payment.succeeded", event);
 
-        verify(downstreamGateway).confirmReservation(session.getInventoryReservationId());
-        verify(downstreamGateway).redeemPromotionUsage(orderId);
+        verify(downstreamGateway).confirmReservation(session.getInventoryReservationId(), orderId);
+        verify(downstreamGateway).redeemPromotionUsage(session.getPromotionUsageReservationId(), orderId);
         verify(downstreamGateway).markOrderPaid(any(), any());
         verify(downstreamGateway).markBasketCheckedOut(basketId, session.getId(), orderId);
         verify(downstreamGateway).createShipmentForOrder(orderId);

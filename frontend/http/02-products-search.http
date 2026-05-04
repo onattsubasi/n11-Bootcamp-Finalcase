@@ -1,0 +1,54 @@
+### ═══════════════════════════════════════════════════════════════
+### PRODUCT & SEARCH — Browse, Search, Admin CRUD
+### ═══════════════════════════════════════════════════════════════
+
+@host = http://localhost:18000
+@admin_token = {{admin_token}}
+
+### ── 1. Search products (catalog-service) ───────────────────────
+GET {{host}}/api/products/search?q=iphone&page=0&size=10
+
+> {%
+  if (response.body.content && response.body.content.length > 0) {
+    client.global.set("product_id", response.body.content[0].id);
+  }
+%}
+
+### ── 2. Get product by ID ───────────────────────────────────────
+GET {{host}}/api/products/{{product_id}}
+
+### ── 3. Search via Alias ────────────────────────────────────────
+GET {{host}}/api/search?q=samsung
+
+### ── 4. Admin: Create a product ─────────────────────────────────
+POST {{host}}/api/admin/products
+Content-Type: application/json
+Authorization: Bearer {{admin_token}}
+
+{
+  "name": "Test Urun HTTP Client",
+  "categoryName": "elektronik",
+  "brandName": "TestBrand",
+  "description": "Bu urun .http dosyasindan olusturuldu",
+  "basePrice": 299.99,
+  "stockQuantity": 50,
+  "imageUrl": "https://picsum.photos/seed/test/400/400"
+}
+
+> {%
+  client.global.set("new_product_id", response.body.id);
+%}
+
+### ── 5. Admin: Update the product ───────────────────────────────
+PUT {{host}}/api/admin/products/{{new_product_id}}
+Content-Type: application/json
+Authorization: Bearer {{admin_token}}
+
+{
+  "name": "Test Urun GUNCELLENDI",
+  "basePrice": 199.99
+}
+
+### ── 6. Admin: Delete the product ───────────────────────────────
+DELETE {{host}}/api/admin/products/{{new_product_id}}
+Authorization: Bearer {{admin_token}}

@@ -1,8 +1,11 @@
 package com.onatsubasi.finalcase.checkout.application.dto.client;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.math.BigDecimal;
 import java.util.UUID;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record OrderClientResponse(
         UUID id,
         String orderNumber,

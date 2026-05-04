@@ -1,0 +1,19 @@
+### 1. Create Checkout Quote
+# @name quote
+POST {{baseUrl}}/api/customer/checkout/quote
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "addressId": "some-address-uuid"
+}
+
+### 2. Submit Checkout
+POST {{baseUrl}}/api/customer/checkout
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "quoteId": "{{quote.response.body.id}}",
+  "paymentMethod": "IYZICO"
+}

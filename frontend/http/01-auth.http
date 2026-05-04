@@ -1,0 +1,24 @@
+### 1. Register
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "firstName": "John",
+  "lastName": "Doe"
+}
+
+### 2. Login
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### 3. Get Me
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{authToken}}

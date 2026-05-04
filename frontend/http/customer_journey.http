@@ -1,0 +1,75 @@
+### Customer Journey E2E Test Suite
+@baseUrl = http://localhost:8080
+@contentType = application/json
+
+# 1. Login
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "username": "customer",
+  "password": "password"
+}
+
+###
+
+@authToken = {{login.response.body.data.token}}
+
+# 2. Search Products
+GET {{baseUrl}}/api/products/search?q=phone&page=0&size=10
+Authorization: Bearer {{authToken}}
+
+###
+
+# 3. Get Product Details
+# @name getProduct
+GET {{baseUrl}}/api/products/facets
+Authorization: Bearer {{authToken}}
+
+###
+
+# 4. Add to Basket
+POST {{baseUrl}}/api/customer/basket/items
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "productId": "prod_123",
+  "quantity": 1
+}
+
+###
+
+# 5. View Basket
+GET {{baseUrl}}/api/customer/basket
+Authorization: Bearer {{authToken}}
+
+###
+
+# 6. Create Checkout Session (Quote)
+POST {{baseUrl}}/api/customer/checkout/quote
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "addressId": "addr_123"
+}
+
+###
+
+# 7. Submit Checkout
+POST {{baseUrl}}/api/customer/checkout
+Authorization: Bearer {{authToken}}
+Content-Type: {{contentType}}
+
+{
+  "checkoutId": "chk_123",
+  "paymentMethod": "CREDIT_CARD"
+}
+
+###
+
+# 8. View Orders
+GET {{baseUrl}}/api/customer/orders
+Authorization: Bearer {{authToken}}

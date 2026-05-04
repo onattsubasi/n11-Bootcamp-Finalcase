@@ -1,15 +1,13 @@
 server:
   port: ${SERVER_PORT:8091}
   forward-headers-strategy: framework
-
 spring:
   application:
     name: checkout-service
-
   datasource:
-    url: ${AUTH_DB_URL:jdbc:postgresql://${DB_HOST:127.0.0.1}:${DB_PORT:5432}/${AUTH_DB_NAME:checkout_db}}
-    username: ${AUTH_DB_USERNAME:${DB_USERNAME:postgres}}
-    password: ${AUTH_DB_PASSWORD:${DB_PASSWORD:postgres}}
+    url: ${CHECKOUT_DB_URL:jdbc:postgresql://${DB_HOST:127.0.0.1}:${DB_PORT:5432}/${CHECKOUT_DB_NAME:checkout_db}}
+    username: ${CHECKOUT_DB_USERNAME:${DB_USERNAME:postgres}}
+    password: ${CHECKOUT_DB_PASSWORD:${DB_PASSWORD:postgres}}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: ${DB_MAX_POOL_SIZE:3}
@@ -17,7 +15,6 @@ spring:
       connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:30000}
       idle-timeout: ${DB_IDLE_TIMEOUT_MS:600000}
       max-lifetime: ${DB_MAX_LIFETIME_MS:1800000}
-
   jpa:
     hibernate:
       ddl-auto: validate
@@ -25,25 +22,17 @@ spring:
     properties:
       hibernate:
         format_sql: true
-
   flyway:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
-
-
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USERNAME:guest}
     password: ${RABBITMQ_PASSWORD:guest}
-
   config:
     import: optional:configserver:${CONFIG_URI:http://localhost:8762}
-
-  profiles:
-    active: ${SPRING_PROFILES_ACTIVE:local}
-
   cloud:
     openfeign:
       circuitbreaker:
@@ -53,7 +42,6 @@ spring:
           default:
             connectTimeout: 3000
             readTimeout: 10000
-
 eureka:
   client:
     service-url:
@@ -61,89 +49,84 @@ eureka:
     register-with-eureka: true
     fetch-registry: true
   instance:
-    prefer-ip-address: true
-
-checkout-service:
-  expiration:
-    payment-pending-timeout-minutes: ${CHECKOUT_PAYMENT_PENDING_TIMEOUT_MINUTES:30}
-  shipping:
-    default-shipping-fee: ${CHECKOUT_DEFAULT_SHIPPING_FEE:0}
-  tax:
-    enabled: ${CHECKOUT_TAX_ENABLED:false}
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
+    prefer-ip-address: ${EUREKA_PREFER_IP_ADDRESS:false}
+    instance-id: ${spring.application.name}:${server.port}
 
 resilience4j:
   circuitbreaker:
     instances:
-      basketService:
+      basket-service:
         slidingWindowSize: 10
         failureRateThreshold: 50
         waitDurationInOpenState: 10s
         permittedNumberOfCallsInHalfOpenState: 3
         automaticTransitionFromOpenToHalfOpenEnabled: true
-      catalogService:
+      catalog-service:
         slidingWindowSize: 10
         failureRateThreshold: 50
         waitDurationInOpenState: 10s
         permittedNumberOfCallsInHalfOpenState: 3
-      userService:
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      user-service:
         slidingWindowSize: 10
         failureRateThreshold: 50
         waitDurationInOpenState: 10s
         permittedNumberOfCallsInHalfOpenState: 3
-      inventoryService:
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      inventory-service:
         slidingWindowSize: 10
         failureRateThreshold: 50
         waitDurationInOpenState: 10s
         permittedNumberOfCallsInHalfOpenState: 3
-      promotionService:
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      promotion-service:
         slidingWindowSize: 10
         failureRateThreshold: 50
         waitDurationInOpenState: 10s
         permittedNumberOfCallsInHalfOpenState: 3
-      orderService:
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      order-service:
         slidingWindowSize: 10
         failureRateThreshold: 50
         waitDurationInOpenState: 10s
         permittedNumberOfCallsInHalfOpenState: 3
-      paymentService:
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      payment-service:
         slidingWindowSize: 10
         failureRateThreshold: 50
         waitDurationInOpenState: 15s
         permittedNumberOfCallsInHalfOpenState: 2
-      shipmentService:
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+      shipment-service:
         slidingWindowSize: 10
         failureRateThreshold: 50
         waitDurationInOpenState: 10s
         permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
   timelimiter:
     instances:
-      basketService:
+      basket-service:
         timeoutDuration: 3s
-      catalogService:
+      catalog-service:
         timeoutDuration: 3s
-      userService:
+      user-service:
         timeoutDuration: 3s
-      inventoryService:
+      inventory-service:
         timeoutDuration: 3s
-      promotionService:
+      promotion-service:
         timeoutDuration: 3s
-      orderService:
+      order-service:
         timeoutDuration: 3s
-      paymentService:
+      payment-service:
         timeoutDuration: 5s
-      shipmentService:
+      shipment-service:
         timeoutDuration: 3s
-
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: when_authorized
-
-logging:
-  level:
-    root: INFO
-    com.onatsubasi.finalcase.checkout: DEBUG

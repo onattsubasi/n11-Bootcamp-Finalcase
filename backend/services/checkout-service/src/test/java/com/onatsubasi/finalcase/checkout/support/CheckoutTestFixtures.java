@@ -49,30 +49,32 @@ public final class CheckoutTestFixtures {
         return new BasketSnapshotClientResponse(
                 basketId,
                 userId,
-                List.of(new BasketItemClientResponse(productId, "SKU-1", quantity, price, CURRENCY)),
-                price.multiply(BigDecimal.valueOf(quantity)),
-                CURRENCY);
+                List.of(new BasketItemClientResponse(productId, "SKU-1", quantity, price, CURRENCY)));
     }
 
     public static BasketSnapshotClientResponse emptyBasket(UUID userId, UUID basketId) {
-        return new BasketSnapshotClientResponse(basketId, userId, List.of(), BigDecimal.ZERO, CURRENCY);
+        return new BasketSnapshotClientResponse(basketId, userId, List.of());
     }
 
-    public static CatalogProductSnapshotClientResponse product(String productId, String price, boolean active) {
+    public static CatalogProductSnapshotClientResponse product(String productId, String price, boolean sellable) {
         return new CatalogProductSnapshotClientResponse(
                 productId,
                 "SKU-1",
-                "example-product",
                 "Example Product",
-                "Description",
-                UUID.randomUUID().toString(),
-                "Brand",
-                UUID.randomUUID().toString(),
-                "Category",
-                "https://cdn.example.com/product.jpg",
-                money(price),
-                CURRENCY,
-                active);
+                "example-product",
+                sellable ? "ACTIVE" : "INACTIVE",
+                sellable,
+                new CatalogProductSnapshotClientResponse.MoneySnapshot(money(price), CURRENCY),
+                new CatalogProductSnapshotClientResponse.BrandSnapshot(UUID.randomUUID().toString(), "Brand", "brand"),
+                new CatalogProductSnapshotClientResponse.CategorySnapshot(
+                        UUID.randomUUID().toString(),
+                        "Category",
+                        "category",
+                        "/category"
+                ),
+                new CatalogProductSnapshotClientResponse.OwnershipSnapshot("PLATFORM", null, null),
+                "https://cdn.example.com/product.jpg"
+        );
     }
 
     public static PromotionQuoteClientResponse noDiscountQuote(String subtotal, String shippingFee) {
@@ -94,12 +96,15 @@ public final class CheckoutTestFixtures {
                 money(grandTotal),
                 List.of(new AppliedPromotionDiscountClientResponse(
                         UUID.randomUUID(),
+                        "Welcome Promotion",
                         UUID.randomUUID(),
                         "WELCOME",
                         "FIXED_AMOUNT_DISCOUNT",
                         money(discount),
                         BigDecimal.ZERO,
-                        "welcome discount")));
+                        "welcome discount"
+                ))
+        );
     }
 
     public static UserAddressSnapshotClientResponse address(UUID addressId, UUID userId) {

@@ -53,8 +53,7 @@ class CheckoutDownstreamGatewayTest {
         InventoryReserveClientRequest request = new InventoryReserveClientRequest(
                 checkoutId,
                 UUID.randomUUID(),
-                UUID.randomUUID(),
-                List.of(new InventoryReserveItemClientRequest(UUID.randomUUID().toString(), 2))
+                List.of(new InventoryReserveItemClientRequest(UUID.randomUUID(), 2))
         );
         InventoryReservationClientResponse response = new InventoryReservationClientResponse(
                 reservationId,
@@ -75,17 +74,28 @@ class CheckoutDownstreamGatewayTest {
     @Test
     void initializePayment_sendsStableIdempotencyKeyDerivedFromCheckoutId() {
         UUID checkoutId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID basketId = UUID.randomUUID();
         UUID paymentId = UUID.randomUUID();
+
         PaymentInitializeClientRequest request = new PaymentInitializeClientRequest(
                 checkoutId,
-                UUID.randomUUID(),
-                UUID.randomUUID(),
+                orderId,
+                "ORD-TEST-001",
+                userId,
                 CheckoutTestFixtures.money("1900.00"),
                 "TRY",
                 "IYZICO",
                 "CHECKOUT_FORM",
+                "http://localhost/payment/success",
+                "http://localhost/payment/failure",
+                "127.0.0.1",
+                basketId,
                 null,
-                false
+                null,
+                null,
+                List.of()
         );
         PaymentInitializeClientResponse response = new PaymentInitializeClientResponse(
                 paymentId,

@@ -80,15 +80,15 @@ public class CheckoutSubmitService {
 
                         quoteService.validateProductsSellable(basket, products);
 
-                        UserAddressSnapshotClientResponse shippingAddress = downstreamGateway.getAddressSnapshot(
+                        AddressSnapshotsClientResponse addressSnapshots = downstreamGateway.getAddressSnapshots(
                                         userId,
-                                        request.shippingAddressId());
+                                        request.shippingAddressId(),
+                                        request.billingAddressId());
 
-                        UserAddressSnapshotClientResponse billingAddress = request.billingAddressId() == null
+                        UserAddressSnapshotClientResponse shippingAddress = addressSnapshots.shippingAddress();
+                        UserAddressSnapshotClientResponse billingAddress = addressSnapshots.billingAddress() == null
                                         ? shippingAddress
-                                        : downstreamGateway.getAddressSnapshot(
-                                                        userId,
-                                                        request.billingAddressId());
+                                        : addressSnapshots.billingAddress();
 
                         BigDecimal shippingFee = quoteService.calculateShippingFee(basket);
                         BigDecimal taxAmount = quoteService.calculateTaxAmount(basket);
@@ -185,9 +185,12 @@ public class CheckoutSubmitService {
                                         order.orderNumber());
 
                         PromotionUsageReservationClientResponse promotionUsageReservation = reservePromotionUsageIfNeeded(
-                                        order.id(),
+                                        session.getId(),
                                         userId,
-                                        quote.discounts());
+                                        quote,
+                                        basket,
+                                        products,
+                                        request.couponCode());
 
                         if (promotionUsageReservation != null) {
                                 context.promotionUsageReserved = true;
@@ -209,7 +212,11 @@ public class CheckoutSubmitService {
                                         checkoutMapper.toPaymentInitializeRequest(
                                                         session,
                                                         request,
-                                                        order));
+                                                        order,
+                                                        shippingAddress,
+                                                        billingAddress,
+                                                        basket,
+                                                        products));
 
                         context.paymentInitialized = true;
 
@@ -265,9 +272,14 @@ public class CheckoutSubmitService {
         }
 
         private PromotionUsageReservationClientResponse reservePromotionUsageIfNeeded(
-                        UUID orderId,
+                        UUID checkoutId,
                         UUID userId,
-                        List<CheckoutDiscountResponse> discounts) {
+                        CheckoutQuoteResponse quote,
+                        BasketSnapshotClientResponse basket,
+                        List<CatalogProductSnapshotClientResponse> products,
+                        String couponCode) {
+                List<CheckoutDiscountResponse> discounts = quote.discounts();
+
                 if (discounts == null || discounts.isEmpty()) {
                         return null;
                 }
@@ -282,9 +294,12 @@ public class CheckoutSubmitService {
 
                 return downstreamGateway.reservePromotionUsage(
                                 checkoutMapper.toPromotionUsageReserveRequest(
-                                                orderId,
+                                                checkoutId,
                                                 userId,
-                                                discounts));
+                                                basket,
+                                                products,
+                                                quote,
+                                                couponCode));
         }
 
         private void compensateSubmitFailure(
@@ -302,8 +317,10 @@ public class CheckoutSubmitService {
                                 return;
                         }
 
-                        if (context.promotionUsageReserved && session.getOrderId() != null) {
-                                downstreamGateway.cancelPromotionUsage(session.getOrderId());
+                        if (context.promotionUsageReserved && session.getPromotionUsageReservationId() != null) {
+                                downstreamGateway.cancelPromotionUsage(
+                                                session.getPromotionUsageReservationId(),
+                                                "CHECKOUT_FAILED");
                         }
 
                         if (context.inventoryReservationId != null) {

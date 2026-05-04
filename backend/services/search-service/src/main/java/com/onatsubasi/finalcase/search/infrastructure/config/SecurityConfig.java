@@ -18,46 +18,49 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final HeaderAuthenticationFilter headerAuthenticationFilter;
+        private final HeaderAuthenticationFilter headerAuthenticationFilter;
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        return http
-                .csrf(AbstractHttpConfigurer::disable)
-                .httpBasic(AbstractHttpConfigurer::disable)
-                .formLogin(AbstractHttpConfigurer::disable)
-                .logout(AbstractHttpConfigurer::disable)
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                "/actuator/health",
-                                "/actuator/info",
-                                "/actuator/prometheus",
-                                "/v3/api-docs/**",
-                                "/swagger-ui/**",
-                                "/swagger-ui.html"
-                        ).permitAll()
+        @Bean
+        public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+                return http
+                                .csrf(AbstractHttpConfigurer::disable)
+                                .httpBasic(AbstractHttpConfigurer::disable)
+                                .formLogin(AbstractHttpConfigurer::disable)
+                                .logout(AbstractHttpConfigurer::disable)
+                                .sessionManagement(session -> session
+                                                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                                .authorizeHttpRequests(auth -> auth
+                                                .requestMatchers(
+                                                                "/actuator/health",
+                                                                "/actuator/info",
+                                                                "/actuator/prometheus",
+                                                                "/v3/api-docs/**",
+                                                                "/swagger-ui/**",
+                                                                "/swagger-ui.html")
+                                                .permitAll()
 
-                        .requestMatchers(
-                                "/api/products/search",
-                                "/api/products/autocomplete",
-                                "/api/products/facets",
-                                "/api/search",
-                                "/api/search/autocomplete",
-                                "/api/search/facets"
-                        ).permitAll()
+                                                .requestMatchers(
+                                                                "api/products",
+                                                                "/api/products/**",
+                                                                "/api/products/search",
+                                                                "/api/products/autocomplete",
+                                                                "/api/products/facets",
+                                                                "/api/search",
+                                                                "/api/search/autocomplete",
+                                                                "/api/search/facets")
+                                                .permitAll()
+                                                .requestMatchers("/api/admin/search/**").hasRole("ADMIN")
+                                                .requestMatchers("/internal/search/**").permitAll()
+                                                .anyRequest().authenticated()
 
-                        .requestMatchers("/api/admin/search/**").hasRole("ADMIN")
+                                                /*
+                                                 * API Gateway must not expose /internal/** publicly.
+                                                 * These endpoints are private service-to-service/admin-ops endpoints.
+                                                 */
+                                                .requestMatchers("/internal/search/**").permitAll()
 
-                        /*
-                         * API Gateway must not expose /internal/** publicly.
-                         * These endpoints are private service-to-service/admin-ops endpoints.
-                         */
-                        .requestMatchers("/internal/search/**").permitAll()
-
-                        .anyRequest().denyAll()
-                )
-                .addFilterBefore(headerAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .build();
-    }
+                                                .anyRequest().denyAll())
+                                .addFilterBefore(headerAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                                .build();
+        }
 }

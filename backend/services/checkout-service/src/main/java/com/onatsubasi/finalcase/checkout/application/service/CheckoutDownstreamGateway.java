@@ -28,7 +28,7 @@ public class CheckoutDownstreamGateway {
     private final ShipmentClient shipmentClient;
     private final CheckoutDownstreamResponseExtractor extractor;
 
-    @CircuitBreaker(name = "basketService", fallbackMethod = "basketSnapshotFallback")
+    @CircuitBreaker(name = "basket-service", fallbackMethod = "basketSnapshotFallback")
     public BasketSnapshotClientResponse getBasketSnapshot(UUID basketId, UUID userId) {
         log.debug(
                 "event=checkout.downstream_call service=basket-service operation=getBasketSnapshot basketId={} userId={}",
@@ -60,7 +60,7 @@ public class CheckoutDownstreamGateway {
         );
     }
 
-    @CircuitBreaker(name = "catalogService", fallbackMethod = "productSnapshotsFallback")
+    @CircuitBreaker(name = "catalog-service", fallbackMethod = "productSnapshotsFallback")
     public List<CatalogProductSnapshotClientResponse> getProductSnapshots(
             CatalogProductSnapshotsClientRequest request
     ) {
@@ -92,28 +92,35 @@ public class CheckoutDownstreamGateway {
     }
 
     @CircuitBreaker(name = "userService", fallbackMethod = "addressSnapshotFallback")
-    public UserAddressSnapshotClientResponse getAddressSnapshot(UUID userId, UUID addressId) {
+    public AddressSnapshotsClientResponse getAddressSnapshots(UUID userId, UUID shippingAddressId, UUID billingAddressId) {
         log.debug(
-                "event=checkout.downstream_call service=user-service operation=getAddressSnapshot userId={} addressId={}",
+                "event=checkout.downstream_call service=user-service operation=getAddressSnapshots userId={} shippingAddressId={} billingAddressId={}",
                 userId,
-                addressId
+                shippingAddressId,
+                billingAddressId
         );
 
         return extractor.extract(
-                userClient.getAddressSnapshot(userId, addressId),
+                userClient.getAddressSnapshots(new AddressSnapshotClientRequest(
+                        userId,
+                        shippingAddressId,
+                        billingAddressId == null ? shippingAddressId : billingAddressId
+                )),
                 CheckoutErrorCode.DOWNSTREAM_USER_FAILED
         );
     }
 
-    public UserAddressSnapshotClientResponse addressSnapshotFallback(
+    public AddressSnapshotsClientResponse addressSnapshotFallback(
             UUID userId,
-            UUID addressId,
+            UUID shippingAddressId,
+            UUID billingAddressId,
             Throwable ex
     ) {
         log.warn(
-                "event=checkout.downstream_unavailable service=user-service operation=getAddressSnapshot userId={} addressId={} reason={}",
+                "event=checkout.downstream_unavailable service=user-service operation=getAddressSnapshots userId={} shippingAddressId={} billingAddressId={} reason={}",
                 userId,
-                addressId,
+                shippingAddressId,
+                billingAddressId,
                 ex.getMessage()
         );
 
@@ -123,14 +130,13 @@ public class CheckoutDownstreamGateway {
         );
     }
 
-    @CircuitBreaker(name = "inventoryService", fallbackMethod = "reserveStockFallback")
+    @CircuitBreaker(name = "inventory-service", fallbackMethod = "reserveStockFallback")
     public InventoryReservationClientResponse reserveStock(
             InventoryReserveClientRequest request
     ) {
         log.info(
-                "event=checkout.inventory_reserve_requested checkoutId={} basketId={} userId={} itemCount={}",
+                "event=checkout.inventory_reserve_requested checkoutId={} userId={} itemCount={}",
                 request.checkoutId(),
-                request.basketId(),
                 request.userId(),
                 request.items() == null ? 0 : request.items().size()
         );
@@ -146,9 +152,8 @@ public class CheckoutDownstreamGateway {
             Throwable ex
     ) {
         log.warn(
-                "event=checkout.downstream_unavailable service=inventory-service operation=reserveStock checkoutId={} basketId={} reason={}",
+                "event=checkout.downstream_unavailable service=inventory-service operation=reserveStock checkoutId={} reason={}",
                 request.checkoutId(),
-                request.basketId(),
                 ex.getMessage()
         );
 
@@ -158,26 +163,32 @@ public class CheckoutDownstreamGateway {
         );
     }
 
-    @CircuitBreaker(name = "inventoryService", fallbackMethod = "confirmReservationFallback")
-    public InventoryReservationClientResponse confirmReservation(UUID reservationId) {
+    @CircuitBreaker(name = "inventory-service", fallbackMethod = "confirmReservationFallback")
+    public InventoryReservationClientResponse confirmReservation(UUID reservationId, UUID orderId) {
         log.info(
-                "event=checkout.inventory_confirm_requested inventoryReservationId={}",
-                reservationId
+                "event=checkout.inventory_confirm_requested inventoryReservationId={} orderId={}",
+                reservationId,
+                orderId
         );
 
         return extractor.extract(
-                inventoryClient.confirmReservation(idempotencyKey("inventory-confirm", reservationId), reservationId),
+                inventoryClient.confirmReservation(
+                        reservationId,
+                        new ConfirmReservationClientRequest(orderId)
+                ),
                 CheckoutErrorCode.DOWNSTREAM_INVENTORY_FAILED
         );
     }
 
     public InventoryReservationClientResponse confirmReservationFallback(
             UUID reservationId,
+            UUID orderId,
             Throwable ex
     ) {
         log.error(
-                "event=checkout.inventory_confirm_unavailable inventoryReservationId={} reason={}",
+                "event=checkout.inventory_confirm_unavailable inventoryReservationId={} orderId={} reason={}",
                 reservationId,
+                orderId,
                 ex.getMessage()
         );
 
@@ -187,7 +198,7 @@ public class CheckoutDownstreamGateway {
         );
     }
 
-    @CircuitBreaker(name = "inventoryService", fallbackMethod = "releaseReservationFallback")
+    @CircuitBreaker(name = "inventory-service", fallbackMethod = "releaseReservationFallback")
     public InventoryReservationClientResponse releaseReservation(UUID reservationId) {
         log.info(
                 "event=checkout.inventory_release_requested inventoryReservationId={}",
@@ -195,7 +206,10 @@ public class CheckoutDownstreamGateway {
         );
 
         return extractor.extract(
-                inventoryClient.releaseReservation(idempotencyKey("inventory-release", reservationId), reservationId),
+                inventoryClient.releaseReservation(
+                        reservationId,
+                        new ReleaseReservationClientRequest("CHECKOUT_FAILED")
+                ),
                 CheckoutErrorCode.DOWNSTREAM_INVENTORY_FAILED
         );
     }
@@ -221,9 +235,8 @@ public class CheckoutDownstreamGateway {
             PromotionQuoteClientRequest request
     ) {
         log.info(
-                "event=checkout.promotion_quote_requested userId={} subtotal={} couponPresent={}",
+                "event=checkout.promotion_quote_requested userId={} couponPresent={}",
                 request.userId(),
-                request.subtotal(),
                 hasCoupon(request.couponCode())
         );
 
@@ -253,17 +266,16 @@ public class CheckoutDownstreamGateway {
         }
 
         log.warn(
-                "event=checkout.promotion_degraded_to_no_discount userId={} subtotal={} reason={}",
+                "event=checkout.promotion_degraded_to_no_discount userId={} reason={}",
                 request.userId(),
-                request.subtotal(),
                 ex.getMessage()
         );
 
         return new PromotionQuoteClientResponse(
-                request.subtotal(),
                 BigDecimal.ZERO,
                 BigDecimal.ZERO,
-                request.subtotal().add(nullSafe(request.shippingFee())),
+                BigDecimal.ZERO,
+                nullSafe(request.shippingFee()),
                 List.of()
         );
     }
@@ -273,14 +285,14 @@ public class CheckoutDownstreamGateway {
             PromotionUsageReserveClientRequest request
     ) {
         log.info(
-                "event=checkout.promotion_reserve_requested orderId={} userId={} discountCount={}",
-                request.orderId(),
+                "event=checkout.promotion_reserve_requested checkoutId={} userId={} itemCount={}",
+                request.checkoutId(),
                 request.userId(),
-                request.appliedDiscounts() == null ? 0 : request.appliedDiscounts().size()
+                request.items() == null ? 0 : request.items().size()
         );
 
         return extractor.extract(
-                promotionClient.reserveUsage(idempotencyKey("promotion-reserve", request.orderId()), request),
+                promotionClient.reserveUsage(idempotencyKey("promotion-reserve", request.checkoutId()), request),
                 CheckoutErrorCode.DOWNSTREAM_PROMOTION_FAILED
         );
     }
@@ -290,8 +302,8 @@ public class CheckoutDownstreamGateway {
             Throwable ex
     ) {
         log.warn(
-                "event=checkout.downstream_unavailable service=promotion-service operation=reserveUsage orderId={} reason={}",
-                request.orderId(),
+                "event=checkout.downstream_unavailable service=promotion-service operation=reserveUsage checkoutId={} reason={}",
+                request.checkoutId(),
                 ex.getMessage()
         );
 
@@ -302,21 +314,26 @@ public class CheckoutDownstreamGateway {
     }
 
     @CircuitBreaker(name = "promotionService", fallbackMethod = "redeemPromotionUsageFallback")
-    public PromotionUsageReservationClientResponse redeemPromotionUsage(UUID orderId) {
-        log.info("event=checkout.promotion_redeem_requested orderId={}", orderId);
+    public PromotionUsageReservationClientResponse redeemPromotionUsage(UUID reservationId, UUID orderId) {
+        log.info("event=checkout.promotion_redeem_requested reservationId={} orderId={}", reservationId, orderId);
 
         return extractor.extract(
-                promotionClient.redeemUsage(idempotencyKey("promotion-redeem", orderId), orderId),
+                promotionClient.redeemUsage(
+                        reservationId,
+                        new PromotionUsageRedeemClientRequest(orderId)
+                ),
                 CheckoutErrorCode.DOWNSTREAM_PROMOTION_FAILED
         );
     }
 
     public PromotionUsageReservationClientResponse redeemPromotionUsageFallback(
+            UUID reservationId,
             UUID orderId,
             Throwable ex
     ) {
         log.error(
-                "event=checkout.promotion_redeem_unavailable orderId={} reason={}",
+                "event=checkout.promotion_redeem_unavailable reservationId={} orderId={} reason={}",
+                reservationId,
                 orderId,
                 ex.getMessage()
         );
@@ -328,22 +345,27 @@ public class CheckoutDownstreamGateway {
     }
 
     @CircuitBreaker(name = "promotionService", fallbackMethod = "cancelPromotionUsageFallback")
-    public PromotionUsageReservationClientResponse cancelPromotionUsage(UUID orderId) {
-        log.info("event=checkout.promotion_cancel_requested orderId={}", orderId);
+    public PromotionUsageReservationClientResponse cancelPromotionUsage(UUID reservationId, String reason) {
+        log.info("event=checkout.promotion_cancel_requested reservationId={} reason={}", reservationId, reason);
 
         return extractor.extract(
-                promotionClient.cancelUsage(idempotencyKey("promotion-cancel", orderId), orderId),
+                promotionClient.cancelUsage(
+                        reservationId,
+                        new PromotionUsageCancelClientRequest(reason)
+                ),
                 CheckoutErrorCode.DOWNSTREAM_PROMOTION_FAILED
         );
     }
 
     public PromotionUsageReservationClientResponse cancelPromotionUsageFallback(
-            UUID orderId,
+            UUID reservationId,
+            String reason,
             Throwable ex
     ) {
         log.error(
-                "event=checkout.promotion_cancel_unavailable orderId={} reason={}",
-                orderId,
+                "event=checkout.promotion_cancel_unavailable reservationId={} cancelReason={} reason={}",
+                reservationId,
+                reason,
                 ex.getMessage()
         );
 
@@ -484,7 +506,7 @@ public class CheckoutDownstreamGateway {
         );
     }
 
-    @CircuitBreaker(name = "basketService", fallbackMethod = "markBasketCheckedOutFallback")
+    @CircuitBreaker(name = "basket-service", fallbackMethod = "markBasketCheckedOutFallback")
     public void markBasketCheckedOut(UUID basketId, UUID checkoutId, UUID orderId) {
         log.info(
                 "event=checkout.basket_mark_checked_out_requested basketId={} checkoutId={} orderId={}",
@@ -494,7 +516,10 @@ public class CheckoutDownstreamGateway {
         );
 
         extractor.extract(
-                basketClient.markBasketCheckedOut(basketId, checkoutId, orderId),
+                basketClient.markBasketCheckedOut(
+                        basketId,
+                        new MarkBasketCheckedOutClientRequest(orderId)
+                ),
                 CheckoutErrorCode.DOWNSTREAM_BASKET_FAILED
         );
     }

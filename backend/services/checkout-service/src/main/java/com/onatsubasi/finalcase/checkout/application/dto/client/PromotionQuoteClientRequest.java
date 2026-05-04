@@ -6,9 +6,9 @@ import java.util.UUID;
 
 public record PromotionQuoteClientRequest(
         UUID userId,
-        BigDecimal subtotal,
-        BigDecimal shippingFee,
         String couponCode,
-        List<PromotionQuoteItemClientRequest> items
+        List<PromotionQuoteItemClientRequest> items,
+        BigDecimal shippingFee,
+        String currency
 ) {
 }

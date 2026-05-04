@@ -81,7 +81,9 @@ public class CheckoutCompensationService {
                         if (!session.isStepCompleted(CheckoutSagaStepName.PROMOTION_CANCELLED)
                                         && session.getOrderId() != null
                                         && session.getPromotionUsageReservationId() != null) {
-                                downstreamGateway.cancelPromotionUsage(session.getOrderId());
+                                downstreamGateway.cancelPromotionUsage(
+                                                session.getPromotionUsageReservationId(),
+                                                "PAYMENT_FAILED");
                                 session.completeStep(CheckoutSagaStepName.PROMOTION_CANCELLED);
                         }
 
